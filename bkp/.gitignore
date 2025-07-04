@@ -1,0 +1,15 @@
+# Arquivos de ambiente virtual
+venv/
+oficina_final/
+
+# Arquivos de cache do Python
+__pycache__/
+*.pyc
+
+# Arquivos gerados pelo PyInstaller
+build/
+dist/
+*.spec
+
+# Arquivo de token de autenticação do usuário - NUNCA ENVIE ISSO!
+token.json
