@@ -20,8 +20,8 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Plataforma de Registo de Ocorrências (Craft Quest)")
-        self.geometry("850x750")
-        self.minsize(750, 650)
+        self.geometry("900x750") # Aumentei a largura para acomodar o novo dashboard
+        self.minsize(800, 650)
         ctk.set_appearance_mode("System")
         ctk.set_default_color_theme("blue")
 
@@ -98,6 +98,7 @@ class App(ctk.CTk):
         elif status == "pending":
             self.show_frame("PendingApprovalView")
         else:
+            self.frames["RequestAccessView"].on_show()
             self.show_frame("RequestAccessView")
 
     def _login_failed(self):
@@ -133,8 +134,9 @@ class App(ctk.CTk):
         messagebox.showinfo("Sucesso", f"O acesso para {email} foi atualizado para '{new_status}'.")
         self.frames["AdminDashboardView"].load_access_requests()
 
-    def get_all_occurrences(self):
-        return sheets_service.get_all_occurrences_for_admin()
+    def get_all_occurrences(self, status_filter=None):
+        """Busca todas as ocorrências para o admin, com filtro opcional."""
+        return sheets_service.get_all_occurrences_for_admin(status_filter)
         
     def save_occurrence_status_changes(self, changes):
         if not changes:
@@ -155,52 +157,3 @@ class App(ctk.CTk):
 
     def get_user_occurrences(self):
         return sheets_service.get_occurrences_by_user(self.credentials, self.user_email)
-
-    def submit_full_occurrence(self, title):
-        """Submete a ocorrência detalhada do parceiro."""
-        if len(self.testes_adicionados) < 2:
-            messagebox.showwarning("Validação Falhou", "É necessário adicionar pelo menos 2 testes de ligação para registar a ocorrência.")
-            return
-        if not title:
-            messagebox.showwarning("Validação Falhou", "Por favor, preencha o Título da Ocorrência.")
-            return
-        
-        try:
-            self.frames["RegistrationView"].set_submitting_state(True)
-            sheets_service.save_occurrence_with_tests(self.credentials, self.user_email, title, self.testes_adicionados)
-            messagebox.showinfo("Sucesso", "Ocorrência de chamada registada com sucesso!")
-            self.show_frame("MainMenuView")
-        except Exception as e:
-            messagebox.showerror("Erro Inesperado", f"Ocorreu um erro ao submeter a ocorrência: {e}")
-        finally:
-            self.frames["RegistrationView"].set_submitting_state(False)
-
-    def submit_simple_call_occurrence(self, title, description):
-        """Submete a ocorrência de chamada simplificada da prefeitura."""
-        if not title or not description:
-            messagebox.showerror("Erro de Validação", "Título e Descrição são obrigatórios.")
-            return
-        try:
-            self.frames["SimpleCallView"].set_submitting_state(True)
-            sheets_service.save_simple_call_occurrence(self.credentials, self.user_email, title, description)
-            messagebox.showinfo("Sucesso", "Ocorrência de chamada registada com sucesso!")
-            self.show_frame("MainMenuView")
-        except Exception as e:
-            messagebox.showerror("Erro Inesperado", f"Ocorreu um erro ao registar a ocorrência: {e}")
-        finally:
-            self.frames["SimpleCallView"].set_submitting_state(False)
-
-    def submit_equipment_occurrence(self, equip_data):
-        """Submete a ocorrência de suporte técnico de equipamento."""
-        if not all(equip_data.values()):
-            messagebox.showerror("Erro de Validação", "Todos os campos são obrigatórios para registar um problema de equipamento.")
-            return
-        try:
-            self.frames["EquipmentView"].set_submitting_state(True)
-            sheets_service.save_equipment_occurrence(self.credentials, self.user_email, equip_data)
-            messagebox.showinfo("Sucesso", "Problema de equipamento registado com sucesso!")
-            self.show_frame("MainMenuView")
-        except Exception as e:
-            messagebox.showerror("Erro Inesperado", f"Ocorreu um erro ao registar o problema: {e}")
-        finally:
-            self.frames["EquipmentView"].set_submitting_state(False)

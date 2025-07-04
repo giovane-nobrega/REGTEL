@@ -1,45 +1,25 @@
 import customtkinter as ctk
-
 class MainMenuView(ctk.CTkFrame):
     """A tela do menu principal, com botões que mudam com base no perfil do utilizador."""
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
-
         center_frame = ctk.CTkFrame(self, fg_color="transparent")
         center_frame.pack(expand=True)
-        
         self.title_label = ctk.CTkLabel(center_frame, text="Menu Principal", font=ctk.CTkFont(size=28, weight="bold"))
         self.title_label.pack(pady=(0, 40))
-        
         self.buttons_frame = ctk.CTkFrame(center_frame, fg_color="transparent")
         self.buttons_frame.pack()
-        
-        # --- Botão de Admin ---
-        self.admin_dashboard_button = ctk.CTkButton(
-            self.buttons_frame, 
-            text="Dashboard de Gestão", 
-            command=lambda: self.controller.show_frame("AdminDashboardView"), 
-            height=50,
-            width=350, 
-            font=ctk.CTkFont(size=16, weight="bold"),
-        )
-        
-        # --- Botões de outros perfis ---
+        self.admin_button = ctk.CTkButton(self.buttons_frame, text="Dashboard de Gestão", command=lambda: self.controller.show_frame("AdminDashboardView"), height=45, width=350, font=ctk.CTkFont(size=14), fg_color="#1F6AA5")
         self.partner_button = ctk.CTkButton(self.buttons_frame, text="Registar Ocorrência de Chamada (Detalhado)", command=lambda: self.controller.show_frame("RegistrationView"), height=45, width=350, font=ctk.CTkFont(size=14))
         self.prefeitura_call_button = ctk.CTkButton(self.buttons_frame, text="Registar Ocorrência de Chamada (Simplificado)", command=lambda: self.controller.show_frame("SimpleCallView"), height=45, width=350, font=ctk.CTkFont(size=14))
         self.prefeitura_equip_button = ctk.CTkButton(self.buttons_frame, text="Registar Suporte Técnico de Equipamento", command=lambda: self.controller.show_frame("EquipmentView"), height=45, width=350, font=ctk.CTkFont(size=14))
-        
-        # --- Botões Comuns ---
         self.history_button = ctk.CTkButton(self.buttons_frame, text="Ver o Meu Histórico de Ocorrências", command=lambda: self.controller.show_frame("HistoryView"), height=45, width=350, font=ctk.CTkFont(size=14))
         self.history_button.pack(pady=8, padx=20, fill="x")
-        
         self.logout_button = ctk.CTkButton(self.buttons_frame, text="Logout (Trocar de utilizador)", command=self.controller.perform_logout, height=45, width=350, font=ctk.CTkFont(size=14), fg_color="#D32F2F", hover_color="#B71C1C")
         self.logout_button.pack(pady=(20, 8), padx=20, fill="x")
-        
         self.exit_button = ctk.CTkButton(self.buttons_frame, text="Fechar Aplicação", command=self.controller.quit, height=45, width=350, font=ctk.CTkFont(size=14), fg_color="gray50", hover_color="gray40")
         self.exit_button.pack(pady=8, padx=20, fill="x")
-        
         self.status_label = ctk.CTkLabel(self, text="", font=ctk.CTkFont(size=12))
         self.status_label.pack(side="bottom", fill="x", pady=10, padx=20)
     
@@ -51,13 +31,11 @@ class MainMenuView(ctk.CTkFrame):
 
     def update_buttons(self, role):
         """Mostra ou oculta os botões com base no perfil do utilizador."""
-        # Oculta todos os botões específicos de perfil primeiro
-        for widget in (self.admin_dashboard_button, self.partner_button, self.prefeitura_call_button, self.prefeitura_equip_button):
+        for widget in (self.admin_button, self.partner_button, self.prefeitura_call_button, self.prefeitura_equip_button):
             widget.pack_forget()
         
-        # Mostra os botões corretos com base no perfil
         if role == "admin":
-            self.admin_dashboard_button.pack(pady=8, padx=20, fill="x", before=self.history_button)
+            self.admin_button.pack(pady=8, padx=20, fill="x", before=self.history_button)
         elif role == "partner":
             self.partner_button.pack(pady=8, padx=20, fill="x", before=self.history_button)
         elif role == "prefeitura":
