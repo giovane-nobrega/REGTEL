@@ -1,15 +1,31 @@
-# Arquivos de ambiente virtual
+# Ambientes Virtuais
 venv/
-oficina_final/
-
-# Arquivos de cache do Python
+/venv/
+.venv/
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 
-# Arquivos gerados pelo PyInstaller
-build/
-dist/
-*.spec
+# Ficheiros de IDEs e editores
+.vscode/
+.idea/
+*.swp
+*.swo
 
-# Arquivo de token de autenticação do usuário - NUNCA ENVIE ISSO!
+# Ficheiros de sistema operativo
+.DS_Store
+Thumbs.db
+
+# Ficheiros de autenticação e tokens (IMPORTANTE)
 token.json
+client_secrets.json
+
+# Ficheiros de log e de base de dados local (se aplicável)
+*.log
+*.db
+*.sqlite3
+
+# Ficheiros de distribuição do PyInstaller
+/dist/
+/build/
+*.spec
