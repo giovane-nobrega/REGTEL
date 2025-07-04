@@ -1,12 +1,8 @@
-# Ficheiro: src/app.py
-
 import customtkinter as ctk
 import threading
 from tkinter import messagebox
-from functools import partial
 
-# As importações agora são diretas, pois 'main.py' configurou o caminho para a pasta 'src'.
-# NOTA: Estes ficheiros de 'views' ainda precisam de ser criados.
+# Importações diretas, pois 'main.py' configurou o caminho.
 from services import auth_service, sheets_service
 from views.login_view import LoginView
 from views.main_menu_view import MainMenuView
@@ -17,14 +13,11 @@ from views.simple_call_view import SimpleCallView
 from views.equipment_view import EquipmentView
 from views.history_view import HistoryView
 
-
 class App(ctk.CTk):
     """
-    Classe principal da aplicação. Atua como o controlador central,
-    gerindo o estado e a navegação entre as diferentes visualizações (telas).
+    Classe principal da aplicação. Atua como o controlador central.
     """
     def __init__(self):
-        """Inicializa a janela principal, o estado da aplicação e as visualizações."""
         super().__init__()
         self.title("Plataforma de Registo de Ocorrências (Craft Quest)")
         self.geometry("850x750")
@@ -32,18 +25,16 @@ class App(ctk.CTk):
         ctk.set_appearance_mode("System")
         ctk.set_default_color_theme("blue")
 
-        # --- Variáveis de Estado da Aplicação ---
         self.credentials = None
         self.user_email = "A carregar..."
         self.user_profile = {}
+        # Variáveis de estado para o formulário de registo detalhado
+        self.testes_adicionados = [] 
+        self.editing_index = None
 
-        # --- Contentor Principal ---
-        # Todas as visualizações serão colocadas dentro deste frame.
         container = ctk.CTkFrame(self)
         container.pack(fill="both", expand=True)
 
-        # --- Dicionário de Telas (Views) ---
-        # Cada tela é uma classe de uma 'view' que é instanciada aqui.
         self.frames = {}
         for F in (LoginView, RequestAccessView, PendingApprovalView, MainMenuView, 
                   AdminDashboardView, RegistrationView, SimpleCallView, EquipmentView, HistoryView):
@@ -52,17 +43,11 @@ class App(ctk.CTk):
             self.frames[page_name] = frame
             frame.place(relwidth=1.0, relheight=1.0)
 
-        # --- Inicialização ---
         self.check_initial_login()
-
-    # =================================================================================
-    # --- LÓGICA DE NAVEGAÇÃO E AUTENTICAÇÃO ---
-    # =================================================================================
 
     def show_frame(self, page_name):
         """Eleva um frame (tela) para o topo, tornando-o visível."""
         frame = self.frames[page_name]
-        # Chama o método on_show se a view o tiver, para carregar dados frescos.
         if hasattr(frame, 'on_show'):
             frame.on_show()
         frame.tkraise()
@@ -107,7 +92,7 @@ class App(ctk.CTk):
         status = self.user_profile.get("status")
         if status == "approved":
             main_menu = self.frames["MainMenuView"]
-            main_menu.update_user_info(self.user_email)
+            main_menu.update_user_info(self.user_email, self.user_profile.get("username", ""))
             main_menu.update_buttons(self.user_profile.get("role"))
             self.show_frame("MainMenuView")
         elif status == "pending":
@@ -129,42 +114,93 @@ class App(ctk.CTk):
         self.show_frame("LoginView")
         self.frames["LoginView"].set_default_state()
 
-    def submit_access_request(self, role):
-        """Envia uma solicitação de acesso."""
-        if not role:
-            messagebox.showwarning("Campo Obrigatório", "Por favor, selecione o seu vínculo.")
+    def submit_access_request(self, full_name, username, role):
+        """Envia uma nova solicitação de acesso."""
+        if not full_name or not username or not role:
+            messagebox.showwarning("Campos Obrigatórios", "Por favor, preencha todos os campos.")
             return
-        sheets_service.request_access(self.user_email, role)
+        sheets_service.request_access(self.user_email, full_name, username, role)
         messagebox.showinfo("Solicitação Enviada", "A sua solicitação de acesso foi enviada.")
         self.show_frame("PendingApprovalView")
         
-    # =================================================================================
-    # --- MÉTODOS DO CONTROLADOR (Pontes entre Views e Services) ---
-    # =================================================================================
+    # --- Métodos do Controlador (Pontes entre Views e Services) ---
     
     def get_pending_requests(self):
-        """Busca as solicitações de acesso pendentes."""
         return sheets_service.get_pending_requests()
         
     def update_user_access(self, email, new_status):
-        """Atualiza o status de acesso de um utilizador."""
         sheets_service.update_user_status(email, new_status)
         messagebox.showinfo("Sucesso", f"O acesso para {email} foi atualizado para '{new_status}'.")
-        # Pede ao dashboard para recarregar a lista de acessos
         self.frames["AdminDashboardView"].load_access_requests()
 
     def get_all_occurrences(self):
-        """Busca todas as ocorrências para o admin."""
         return sheets_service.get_all_occurrences_for_admin()
         
     def save_occurrence_status_changes(self, changes):
-        """Salva as alterações de status feitas pelo admin."""
         if not changes:
             messagebox.showinfo("Nenhuma Alteração", "Nenhum status foi alterado.")
             return
-            
         for occ_id, new_status in changes.items():
             sheets_service.update_occurrence_status(occ_id, new_status)
-        
         messagebox.showinfo("Sucesso", f"{len(changes)} alterações de status foram salvas com sucesso.")
         self.frames["AdminDashboardView"].load_all_occurrences()
+
+    def get_all_users(self):
+        return sheets_service.get_all_users()
+
+    def update_user_role(self, email, new_role):
+        sheets_service.update_user_role(email, new_role)
+        messagebox.showinfo("Sucesso", f"O perfil de {email} foi atualizado para '{new_role}'.")
+        self.frames["AdminDashboardView"].load_all_users()
+
+    def get_user_occurrences(self):
+        return sheets_service.get_occurrences_by_user(self.credentials, self.user_email)
+
+    def submit_full_occurrence(self, title):
+        """Submete a ocorrência detalhada do parceiro."""
+        if len(self.testes_adicionados) < 2:
+            messagebox.showwarning("Validação Falhou", "É necessário adicionar pelo menos 2 testes de ligação para registar a ocorrência.")
+            return
+        if not title:
+            messagebox.showwarning("Validação Falhou", "Por favor, preencha o Título da Ocorrência.")
+            return
+        
+        try:
+            self.frames["RegistrationView"].set_submitting_state(True)
+            sheets_service.save_occurrence_with_tests(self.credentials, self.user_email, title, self.testes_adicionados)
+            messagebox.showinfo("Sucesso", "Ocorrência de chamada registada com sucesso!")
+            self.show_frame("MainMenuView")
+        except Exception as e:
+            messagebox.showerror("Erro Inesperado", f"Ocorreu um erro ao submeter a ocorrência: {e}")
+        finally:
+            self.frames["RegistrationView"].set_submitting_state(False)
+
+    def submit_simple_call_occurrence(self, title, description):
+        """Submete a ocorrência de chamada simplificada da prefeitura."""
+        if not title or not description:
+            messagebox.showerror("Erro de Validação", "Título e Descrição são obrigatórios.")
+            return
+        try:
+            self.frames["SimpleCallView"].set_submitting_state(True)
+            sheets_service.save_simple_call_occurrence(self.credentials, self.user_email, title, description)
+            messagebox.showinfo("Sucesso", "Ocorrência de chamada registada com sucesso!")
+            self.show_frame("MainMenuView")
+        except Exception as e:
+            messagebox.showerror("Erro Inesperado", f"Ocorreu um erro ao registar a ocorrência: {e}")
+        finally:
+            self.frames["SimpleCallView"].set_submitting_state(False)
+
+    def submit_equipment_occurrence(self, equip_data):
+        """Submete a ocorrência de suporte técnico de equipamento."""
+        if not all(equip_data.values()):
+            messagebox.showerror("Erro de Validação", "Todos os campos são obrigatórios para registar um problema de equipamento.")
+            return
+        try:
+            self.frames["EquipmentView"].set_submitting_state(True)
+            sheets_service.save_equipment_occurrence(self.credentials, self.user_email, equip_data)
+            messagebox.showinfo("Sucesso", "Problema de equipamento registado com sucesso!")
+            self.show_frame("MainMenuView")
+        except Exception as e:
+            messagebox.showerror("Erro Inesperado", f"Ocorreu um erro ao registar o problema: {e}")
+        finally:
+            self.frames["EquipmentView"].set_submitting_state(False)

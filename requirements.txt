@@ -1,4 +1,4 @@
-customtkinter
-google-api-python-client
-google-auth-oauthlib
 gspread
+google-auth-oauthlib
+google-auth-httplib2
+customtkinter
