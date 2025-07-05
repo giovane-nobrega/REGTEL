@@ -40,7 +40,7 @@ class HistoryView(ctk.CTkFrame):
     def _populate_history(self, occurrences):
         """Preenche a UI com o histórico do utilizador."""
         if not occurrences:
-            self.history_scrollable_frame.configure(label_text="Nenhuma ocorrência registada por si.")
+            self.history_scrollable_frame.configure(label_text="Nenhuma ocorrência registrada.")
             return
             
         self.history_scrollable_frame.configure(label_text="")
@@ -57,7 +57,7 @@ class HistoryView(ctk.CTkFrame):
             title_label = ctk.CTkLabel(card, text=title, font=ctk.CTkFont(size=14, weight="bold"), anchor="w")
             title_label.grid(row=0, column=0, sticky="ew", padx=10, pady=(5, 0))
             
-            details_label = ctk.CTkLabel(card, text=f"Registado em: {date}", anchor="w", text_color="gray60")
+            details_label = ctk.CTkLabel(card, text=f"Registrado em: {date}", anchor="w", text_color="gray60")
             details_label.grid(row=1, column=0, sticky="w", padx=10, pady=(0,5))
             
             status_label = ctk.CTkLabel(card, text=f"Status: {status}", anchor="e", font=ctk.CTkFont(weight="bold"))

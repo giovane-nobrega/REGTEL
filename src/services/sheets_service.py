@@ -7,7 +7,11 @@ _users_db = [
     {"email": "maria.santos@prefeitura.example.com", "name": "Maria Santos", "username": "msantos", "role": "prefeitura", "status": "pending"},
     {"email": "pedro.costa@gmail.com", "name": "Pedro Costa", "username": "pcosta", "role": "partner", "status": "pending"},
 ]
-_call_occurrences_db = [{'ID': 'CALL-001', 'Data de Registro': '2025-06-30 15:00:12', 'Título da Ocorrência': 'Chiado em ligações para Vivo (Exemplo)', 'Email do Registrador': 'parceiro@exemplo.com', 'Status': 'Resolvido'}, {'ID': 'CALL-002', 'Data de Registro': '2025-07-01 09:05:45', 'Título da Ocorrência': 'Chamadas mudas para TIM (Exemplo)', 'Email do Registrador': 'parceiro@exemplo.com', 'Status': 'Em Análise'}]
+_call_occurrences_db = [
+    {'ID': 'CALL-001', 'Data de Registro': '2025-06-30 15:00:12', 'Título da Ocorrência': 'Chiado em ligações para Vivo (Exemplo)', 'Email do Registrador': 'parceiro@exemplo.com', 'Status': 'Resolvido', 'Operadora A': 'Vivo Fixo', 'Operadora B': 'Claro Fixo'}, 
+    {'ID': 'CALL-002', 'Data de Registro': '2025-07-01 09:05:45', 'Título da Ocorrência': 'Chamadas mudas para TIM (Exemplo)', 'Email do Registrador': 'parceiro@exemplo.com', 'Status': 'Em Análise', 'Operadora A': 'Outra', 'Operadora B': 'TIM'},
+    {'ID': 'CALL-003', 'Data de Registro': '2025-07-02 10:00:00', 'Título da Ocorrência': 'Chamada de (67) 99999-1111 para (67) 3421-2222', 'Email do Registrador': 'joao.silva@prefeitura.example.com', 'Status': 'Registrado', 'Operadora A': 'Vivo Fixo', 'Operadora B': 'Oi Fixo'}
+]
 _equipment_occurrences_db = [{'ID': 'EQUIP-001', 'Data de Registro': '2025-07-01 11:30:00', 'Tipo de Equipamento': 'Telefone IP', 'Email do Registrador': 'joao.silva@prefeitura.example.com', 'Status': 'Registrado'}]
 def check_user_status(email):
     for user in _users_db:
@@ -40,17 +44,18 @@ def update_occurrence_status(occurrence_id, new_status):
                 occ['Status'] = new_status
                 return True
     return False
-def save_simple_call_occurrence(credentials, user_email, title, description): _call_occurrences_db.append({'ID': f"CALL-{random.randint(100, 999)}", "Data de Registro": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Email do Registrador": user_email, "Título da Ocorrência": title, "Status": "Registrado"})
-def save_occurrence_with_tests(credentials, user_email, titulo_ocorrencia, testes_adicionados): _call_occurrences_db.append({'ID': f"CALL-{random.randint(100, 999)}", "Data de Registro": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Email do Registrador": user_email, "Título da Ocorrência": titulo_ocorrencia, "Status": "Registrado"})
-def save_equipment_occurrence(credentials, user_email, equip_data): _equipment_occurrences_db.append({'ID': f"EQUIP-{random.randint(100, 999)}", "Data de Registro": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Email do Registrador": user_email, "Tipo de Equipamento": equip_data.get('tipo', 'N/A'), "Status": "Registrado"})
 def get_occurrences_by_user(credentials, user_email): return [occ for occ in _call_occurrences_db + _equipment_occurrences_db if occ["Email do Registrador"] == user_email]
-def get_all_occurrences_for_admin(status_filter=None):
-    """Busca TODAS as ocorrências para o dashboard do admin, com filtro opcional."""
+def get_all_occurrences_for_admin(status_filter=None, role_filter=None):
+    """Busca TODAS as ocorrências para o dashboard do admin, com filtros opcionais."""
     all_occurrences = _call_occurrences_db + _equipment_occurrences_db
     
+    # Filtro por status
     if status_filter and status_filter != "Todos":
-        filtered_list = [occ for occ in all_occurrences if occ.get('Status') == status_filter]
-    else:
-        filtered_list = all_occurrences
+        all_occurrences = [occ for occ in all_occurrences if occ.get('Status') == status_filter]
         
-    return sorted(filtered_list, key=lambda x: x['Data de Registro'], reverse=True)
+    # Filtro por perfil
+    if role_filter and role_filter != "Todos":
+        email_to_role = {user['email']: user['role'] for user in _users_db}
+        all_occurrences = [occ for occ in all_occurrences if email_to_role.get(occ.get('Email do Registrador')) == role_filter]
+        
+    return sorted(all_occurrences, key=lambda x: x['Data de Registro'], reverse=True)

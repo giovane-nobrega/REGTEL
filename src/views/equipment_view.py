@@ -85,4 +85,4 @@ class EquipmentView(ctk.CTkFrame):
             self.submit_button.configure(state="disabled", text="A enviar...")
         else:
             self.submit_button.configure(
-                state="normal", text="Registar Problema")
+                state="normal", text="Registrar Problema")

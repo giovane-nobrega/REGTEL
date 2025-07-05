@@ -13,30 +13,33 @@ from views.simple_call_view import SimpleCallView
 from views.equipment_view import EquipmentView
 from views.history_view import HistoryView
 
+
 class App(ctk.CTk):
     """
     Classe principal da aplicação. Atua como o controlador central.
     """
+
     def __init__(self):
         super().__init__()
-        self.title("Plataforma de Registo de Ocorrências (Craft Quest)")
-        self.geometry("900x750") # Aumentei a largura para acomodar o novo dashboard
-        self.minsize(800, 650)
+        self.title("Plataforma de Registro de Ocorrências (Craft Quest)")
+        # Aumentei a largura para acomodar o novo dashboard
+        self.geometry("950x750")
+        self.minsize(850, 650)
         ctk.set_appearance_mode("System")
         ctk.set_default_color_theme("blue")
 
         self.credentials = None
-        self.user_email = "A carregar..."
+        self.user_email = "Carregando..."
         self.user_profile = {}
-        # Variáveis de estado para o formulário de registo detalhado
-        self.testes_adicionados = [] 
+        # Variáveis de estado para o formulário de registro detalhado
+        self.testes_adicionados = []
         self.editing_index = None
 
         container = ctk.CTkFrame(self)
         container.pack(fill="both", expand=True)
 
         self.frames = {}
-        for F in (LoginView, RequestAccessView, PendingApprovalView, MainMenuView, 
+        for F in (LoginView, RequestAccessView, PendingApprovalView, MainMenuView,
                   AdminDashboardView, RegistrationView, SimpleCallView, EquipmentView, HistoryView):
             page_name = F.__name__
             frame = F(parent=container, controller=self)
@@ -56,15 +59,19 @@ class App(ctk.CTk):
         """Verifica as credenciais no início da aplicação."""
         self.credentials = auth_service.load_credentials()
         if self.credentials:
-            self.frames["LoginView"].set_loading_state("A verificar credenciais...")
-            threading.Thread(target=self._fetch_user_profile, daemon=True).start()
+            self.frames["LoginView"].set_loading_state(
+                "Verificando credenciais...")
+            threading.Thread(target=self._fetch_user_profile,
+                             daemon=True).start()
         else:
             self.show_frame("LoginView")
 
     def perform_login(self):
         """Inicia o fluxo de login do Google."""
-        self.frames["LoginView"].set_loading_state("Aguarde... A abrir o navegador")
-        threading.Thread(target=self._run_login_flow_in_thread, daemon=True).start()
+        self.frames["LoginView"].set_loading_state(
+            "Aguarde... Abrindo o navegador")
+        threading.Thread(target=self._run_login_flow_in_thread,
+                         daemon=True).start()
 
     def _run_login_flow_in_thread(self):
         """Executa o login numa thread separada."""
@@ -77,22 +84,24 @@ class App(ctk.CTk):
             self.after(0, self._login_failed)
 
     def _fetch_user_profile(self):
-        """Busca o perfil do utilizador."""
+        """Busca o perfil do usuário."""
         self.user_email = auth_service.get_user_email(self.credentials)
         if "Erro" in self.user_email:
-            self.after(0, lambda: messagebox.showerror("Erro de Autenticação", "Não foi possível obter o seu e-mail do Google."))
+            self.after(0, lambda: messagebox.showerror(
+                "Erro de Autenticação", "Não foi possível obter o seu e-mail do Google."))
             self.after(0, self.perform_logout)
             return
-        
+
         self.user_profile = sheets_service.check_user_status(self.user_email)
         self.after(0, self.navigate_based_on_status)
 
     def navigate_based_on_status(self):
-        """Navega para a tela correta com base no status do utilizador."""
+        """Navega para a tela correta com base no status do usuário."""
         status = self.user_profile.get("status")
         if status == "approved":
             main_menu = self.frames["MainMenuView"]
-            main_menu.update_user_info(self.user_email, self.user_profile.get("username", ""))
+            main_menu.update_user_info(
+                self.user_email, self.user_profile.get("username", ""))
             main_menu.update_buttons(self.user_profile.get("role"))
             self.show_frame("MainMenuView")
         elif status == "pending":
@@ -103,11 +112,12 @@ class App(ctk.CTk):
 
     def _login_failed(self):
         """Lida com falhas no login."""
-        messagebox.showerror("Falha no Login", "O processo de login foi cancelado ou falhou.")
+        messagebox.showerror(
+            "Falha no Login", "O processo de login foi cancelado ou falhou.")
         self.frames["LoginView"].set_default_state()
 
     def perform_logout(self):
-        """Realiza o logout do utilizador."""
+        """Realiza o logout do usuário."""
         auth_service.logout()
         self.user_email = None
         self.credentials = None
@@ -118,33 +128,39 @@ class App(ctk.CTk):
     def submit_access_request(self, full_name, username, role):
         """Envia uma nova solicitação de acesso."""
         if not full_name or not username or not role:
-            messagebox.showwarning("Campos Obrigatórios", "Por favor, preencha todos os campos.")
+            messagebox.showwarning("Campos Obrigatórios",
+                                   "Por favor, preencha todos os campos.")
             return
-        sheets_service.request_access(self.user_email, full_name, username, role)
-        messagebox.showinfo("Solicitação Enviada", "A sua solicitação de acesso foi enviada.")
+        sheets_service.request_access(
+            self.user_email, full_name, username, role)
+        messagebox.showinfo("Solicitação Enviada",
+                            "Sua solicitação de acesso foi enviada.")
         self.show_frame("PendingApprovalView")
-        
+
     # --- Métodos do Controlador (Pontes entre Views e Services) ---
-    
+
     def get_pending_requests(self):
         return sheets_service.get_pending_requests()
-        
+
     def update_user_access(self, email, new_status):
         sheets_service.update_user_status(email, new_status)
-        messagebox.showinfo("Sucesso", f"O acesso para {email} foi atualizado para '{new_status}'.")
+        messagebox.showinfo(
+            "Sucesso", f"O acesso para {email} foi atualizado para '{new_status}'.")
         self.frames["AdminDashboardView"].load_access_requests()
 
-    def get_all_occurrences(self, status_filter=None):
-        """Busca todas as ocorrências para o admin, com filtro opcional."""
-        return sheets_service.get_all_occurrences_for_admin(status_filter)
-        
+    def get_all_occurrences(self, status_filter=None, role_filter=None):
+        """Busca todas as ocorrências para o admin, com filtros opcionais."""
+        return sheets_service.get_all_occurrences_for_admin(status_filter, role_filter)
+
     def save_occurrence_status_changes(self, changes):
         if not changes:
-            messagebox.showinfo("Nenhuma Alteração", "Nenhum status foi alterado.")
+            messagebox.showinfo("Nenhuma Alteração",
+                                "Nenhum status foi alterado.")
             return
         for occ_id, new_status in changes.items():
             sheets_service.update_occurrence_status(occ_id, new_status)
-        messagebox.showinfo("Sucesso", f"{len(changes)} alterações de status foram salvas com sucesso.")
+        messagebox.showinfo(
+            "Sucesso", f"{len(changes)} alterações de status foram salvas com sucesso.")
         self.frames["AdminDashboardView"].load_all_occurrences()
 
     def get_all_users(self):
@@ -152,7 +168,8 @@ class App(ctk.CTk):
 
     def update_user_role(self, email, new_role):
         sheets_service.update_user_role(email, new_role)
-        messagebox.showinfo("Sucesso", f"O perfil de {email} foi atualizado para '{new_role}'.")
+        messagebox.showinfo(
+            "Sucesso", f"O perfil de {email} foi atualizado para '{new_role}'.")
         self.frames["AdminDashboardView"].load_all_users()
 
     def get_user_occurrences(self):
