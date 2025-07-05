@@ -22,9 +22,8 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Plataforma de Registro de Ocorrências (Craft Quest)")
-        # Aumentei a largura para acomodar o novo dashboard
-        self.geometry("950x750")
-        self.minsize(850, 650)
+        self.geometry("900x750")
+        self.minsize(800, 650)
         ctk.set_appearance_mode("System")
         ctk.set_default_color_theme("blue")
 
@@ -149,7 +148,6 @@ class App(ctk.CTk):
         self.frames["AdminDashboardView"].load_access_requests()
 
     def get_all_occurrences(self, status_filter=None, role_filter=None):
-        """Busca todas as ocorrências para o admin, com filtros opcionais."""
         return sheets_service.get_all_occurrences_for_admin(status_filter, role_filter)
 
     def save_occurrence_status_changes(self, changes):
@@ -174,3 +172,65 @@ class App(ctk.CTk):
 
     def get_user_occurrences(self):
         return sheets_service.get_occurrences_by_user(self.credentials, self.user_email)
+
+    def submit_full_occurrence(self, title):
+        """Submete a ocorrência detalhada do parceiro."""
+        if len(self.testes_adicionados) < 3:
+            messagebox.showwarning(
+                "Validação Falhou", "É necessário adicionar pelo menos 3 testes de ligação para registrar a ocorrência.")
+            return
+        if not title:
+            messagebox.showwarning(
+                "Validação Falhou", "Por favor, preencha o Título da Ocorrência.")
+            return
+
+        try:
+            self.frames["RegistrationView"].set_submitting_state(True)
+            sheets_service.save_occurrence_with_tests(
+                self.credentials, self.user_email, title, self.testes_adicionados)
+            messagebox.showinfo(
+                "Sucesso", "Ocorrência de chamada registrada com sucesso!")
+            self.show_frame("MainMenuView")
+        except Exception as e:
+            messagebox.showerror(
+                "Erro Inesperado", f"Ocorreu um erro ao submeter a ocorrência: {e}")
+        finally:
+            self.frames["RegistrationView"].set_submitting_state(False)
+
+    def submit_simple_call_occurrence(self, form_data):
+        """Submete a ocorrência de chamada simplificada da prefeitura."""
+        if not all(form_data.values()):
+            messagebox.showerror("Erro de Validação",
+                                 "Todos os campos são obrigatórios.")
+            return
+        try:
+            self.frames["SimpleCallView"].set_submitting_state(True)
+            sheets_service.save_simple_call_occurrence(
+                self.credentials, self.user_email, form_data)
+            messagebox.showinfo(
+                "Sucesso", "Ocorrência de chamada registrada com sucesso!")
+            self.show_frame("MainMenuView")
+        except Exception as e:
+            messagebox.showerror(
+                "Erro Inesperado", f"Ocorreu um erro ao registrar a ocorrência: {e}")
+        finally:
+            self.frames["SimpleCallView"].set_submitting_state(False)
+
+    def submit_equipment_occurrence(self, equip_data):
+        """Submete a ocorrência de suporte técnico de equipamento."""
+        if not all(equip_data.values()):
+            messagebox.showerror(
+                "Erro de Validação", "Todos os campos são obrigatórios para registrar um problema de equipamento.")
+            return
+        try:
+            self.frames["EquipmentView"].set_submitting_state(True)
+            sheets_service.save_equipment_occurrence(
+                self.credentials, self.user_email, equip_data)
+            messagebox.showinfo(
+                "Sucesso", "Problema de equipamento registrado com sucesso!")
+            self.show_frame("MainMenuView")
+        except Exception as e:
+            messagebox.showerror(
+                "Erro Inesperado", f"Ocorreu um erro ao registrar o problema: {e}")
+        finally:
+            self.frames["EquipmentView"].set_submitting_state(False)
