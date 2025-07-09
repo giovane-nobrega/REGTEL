@@ -56,12 +56,14 @@ class SimpleCallView(ctk.CTkFrame):
 
     def submit(self):
         """Chama o controlador para submeter a ocorrência."""
+        # ALTERAÇÃO AQUI: Convertendo todos os campos para maiúsculas
         form_data = {
-            "origem": self.entry_num_origem.get(),
-            "destino": self.entry_num_destino.get(),
-            "descricao": self.description_textbox.get("1.0", "end-1c")
+            "origem": self.entry_num_origem.get().upper(),
+            "destino": self.entry_num_destino.get().upper(),
+            "descricao": self.description_textbox.get("1.0", "end-1c").upper()
         }
         self.controller.submit_simple_call_occurrence(form_data)
+
 
     def set_submitting_state(self, is_submitting):
         """Ativa/desativa os botões durante o envio."""

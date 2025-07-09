@@ -31,8 +31,12 @@ class RequestAccessView(ctk.CTkFrame):
         self.role_combobox.set("Parceiro 67 Telecom")
 
     def submit(self):
-        self.controller.submit_access_request(self.name_entry.get(), self.username_entry.get(), self.role_combobox.get())
-
+        # ALTERAÇÃO AQUI: Convertendo o nome para maiúsculas
+        full_name = self.name_entry.get().upper()
+        username = self.username_entry.get() # Mantido como está (pode ser case-sensitive)
+        role = self.role_combobox.get()
+        self.controller.submit_access_request(full_name, username, role)
+        
 class PendingApprovalView(ctk.CTkFrame):
     def __init__(self, parent, controller):
         super().__init__(parent)

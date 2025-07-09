@@ -7,7 +7,6 @@ SRC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src')
 sys.path.insert(0, SRC_PATH)
 
 # 2. Agora que o caminho está configurado, importamos e executamos a aplicação.
-#    O comentário '# noqa' impede que o VS Code mova esta linha para o topo.
 from app import App  # noqa
 
 

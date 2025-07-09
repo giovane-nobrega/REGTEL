@@ -70,12 +70,13 @@ class EquipmentView(ctk.CTkFrame):
 
     def submit(self):
         """Chama o controlador para submeter a ocorrência."""
+        # ALTERAÇÃO AQUI: Convertendo todos os campos para maiúsculas
         data = {
-            "tipo": self.equip_type.get(),
-            "modelo": self.equip_model.get(),
-            "serial": self.equip_serial.get(),
-            "localizacao": self.equip_location.get(),
-            "descricao": self.equip_description.get("1.0", "end-1c")
+            "tipo": self.equip_type.get().upper(),
+            "modelo": self.equip_model.get().upper(),
+            "serial": self.equip_serial.get().upper(),
+            "localizacao": self.equip_location.get().upper(),
+            "descricao": self.equip_description.get("1.0", "end-1c").upper()
         }
         self.controller.submit_equipment_occurrence(data)
 
