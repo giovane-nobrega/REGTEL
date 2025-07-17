@@ -30,9 +30,12 @@ class App(ctk.CTk):
         self.credentials = None
         self.user_email = "Carregando..."
         self.user_profile = {}
-        # Variáveis de estado para o formulário de registro detalhado
         self.testes_adicionados = []
         self.editing_index = None
+        
+        # ALTERAÇÃO AQUI: Nova variável para armazenar a lista de operadoras.
+        # Isto garante que o atributo sempre existe, evitando o AttributeError.
+        self.operator_list = []
 
         container = ctk.CTkFrame(self)
         container.pack(fill="both", expand=True)
@@ -56,6 +59,9 @@ class App(ctk.CTk):
 
     def check_initial_login(self):
         """Verifica as credenciais no início da aplicação."""
+        # ALTERAÇÃO AQUI: Carrega a lista de operadoras em segundo plano.
+        threading.Thread(target=self.load_operators, daemon=True).start()
+        
         self.credentials = auth_service.load_credentials()
         if self.credentials:
             self.frames["LoginView"].set_loading_state(
@@ -64,6 +70,14 @@ class App(ctk.CTk):
                              daemon=True).start()
         else:
             self.show_frame("LoginView")
+
+    # ALTERAÇÃO AQUI: Nova função para carregar as operadoras do serviço.
+    def load_operators(self):
+        """Carrega a lista de operadoras do serviço."""
+        self.operator_list = sheets_service.get_all_operators()
+        # Atualiza o widget na RegistrationView se ele já foi criado
+        if "RegistrationView" in self.frames:
+            self.frames["RegistrationView"].set_operator_suggestions(self.operator_list)
 
     def perform_login(self):
         """Inicia o fluxo de login do Google."""
@@ -136,8 +150,6 @@ class App(ctk.CTk):
                             "Sua solicitação de acesso foi enviada.")
         self.show_frame("PendingApprovalView")
 
-    # --- Métodos do Controlador (Pontes entre Views e Services) ---
-
     def get_pending_requests(self):
         return sheets_service.get_pending_requests()
 
@@ -177,34 +189,25 @@ class App(ctk.CTk):
         """Retorna o perfil do usuário logado."""
         return self.user_profile.get("role")
 
-    # --- MÉTODOS DE SUBMISSÃO DE OCORRÊNCIAS ---
-
     def submit_simple_call_occurrence(self, form_data):
-        # Este método precisa ser implementado para salvar os dados
         print("Submetendo ocorrência de chamada simples:", form_data)
         messagebox.showinfo("Sucesso", "Ocorrência de chamada simples registrada!")
         self.show_frame("MainMenuView")
 
     def submit_equipment_occurrence(self, data):
-        # Este método precisa ser implementado para salvar os dados
         print("Submetendo ocorrência de equipamento:", data)
         messagebox.showinfo("Sucesso", "Ocorrência de equipamento registrada!")
         self.show_frame("MainMenuView")
 
-    # ALTERAÇÃO AQUI: Método adicionado para corrigir o bug do histórico de parceiros
     def submit_full_occurrence(self, title):
-        """Recebe e valida os dados do formulário de ocorrência detalhada."""
         if not title:
             messagebox.showwarning("Campo Obrigatório", "O título da ocorrência é obrigatório.")
             return
-
         if len(self.testes_adicionados) < 3:
             messagebox.showwarning("Validação Falhou", "É necessário adicionar pelo menos 3 testes de ligação como evidência.")
             return
-
         view = self.frames["RegistrationView"]
         view.set_submitting_state(True)
-
         threading.Thread(
             target=self._submit_full_occurrence_thread,
             args=(title, self.testes_adicionados),
@@ -212,12 +215,10 @@ class App(ctk.CTk):
         ).start()
 
     def _submit_full_occurrence_thread(self, title, testes):
-        """Executa o registro em uma thread para não travar a UI."""
         sheets_service.register_full_occurrence(self.user_email, title, testes)
         self.after(0, self._on_full_occurrence_submitted)
 
     def _on_full_occurrence_submitted(self):
-        """Ações a serem executadas após o registro bem-sucedido."""
         messagebox.showinfo("Sucesso", "Ocorrência registrada com sucesso!")
         view = self.frames["RegistrationView"]
         view.set_submitting_state(False)

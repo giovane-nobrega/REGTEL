@@ -12,7 +12,6 @@ _users_db = [
     {"email": "pedro.costa@gmail.com", "name": "PEDRO COSTA", "username": "pcosta", "role": "partner", "status": "pending"},
 ]
 
-# ALTERAÇÃO AQUI: Adicionado o campo 'Testes' para manter a estrutura de dados consistente.
 _call_occurrences_db = [
     {'ID': 'CALL-001', 'Data de Registro': '2025-06-30 15:00:12', 'Título da Ocorrência': 'CHIADO EM LIGAÇÕES PARA VIVO (EXEMPLO)', 'Email do Registrador': 'parceiro@exemplo.com', 'Status': 'Resolvido', 'Operadora A': 'VIVO FIXO', 'Operadora B': 'CLARO FIXO', 'Testes': '[]'}, 
     {'ID': 'CALL-002', 'Data de Registro': '2025-07-01 09:05:45', 'Título da Ocorrência': 'CHAMADAS MUDAS PARA TIM (EXEMPLO)', 'Email do Registrador': 'parceiro@exemplo.com', 'Status': 'Em Análise', 'Operadora A': 'OUTRA', 'Operadora B': 'TIM', 'Testes': '[]'},
@@ -22,6 +21,22 @@ _call_occurrences_db = [
 _equipment_occurrences_db = [{'ID': 'EQUIP-001', 'Data de Registro': '2025-07-01 11:30:00', 'Tipo de Equipamento': 'TELEFONE IP', 'Email do Registrador': 'joao.silva@prefeitura.example.com', 'Status': 'Registrado'}]
 
 # --- FUNÇÕES DE SERVIÇO ---
+
+# ALTERAÇÃO AQUI: Nova função para obter todas as operadoras únicas
+def get_all_operators():
+    """Busca todas as operadoras únicas já registradas e as retorna em ordem alfabética."""
+    operators = set()
+    for occ in _call_occurrences_db:
+        if occ.get('Operadora A'):
+            operators.add(occ['Operadora A'])
+        if occ.get('Operadora B'):
+            operators.add(occ['Operadora B'])
+    
+    # Adiciona uma lista padrão para garantir que as principais sempre existam
+    default_operators = ["VIVO FIXO", "CLARO FIXO", "OI FIXO", "TIM", "EMBRATEL", "ALGAR TELECOM", "OUTRA"]
+    operators.update(default_operators)
+    
+    return sorted(list(operators))
 
 def check_user_status(email):
     for user in _users_db:
@@ -35,19 +50,13 @@ def request_access(email, full_name, username, role_name):
         if user["email"] == email: return
     _users_db.append({"email": email, "name": full_name, "username": username, "role": role, "status": "pending"})
 
-# ALTERAÇÃO AQUI: Nova função para registrar a ocorrência detalhada dos parceiros.
 def register_full_occurrence(user_email, title, testes):
     """Registra uma ocorrência detalhada com múltiplos testes."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     new_id = f"CALL-{len(_call_occurrences_db) + 1:03d}"
-
-    # Pega a informação da operadora do primeiro teste para fins de resumo e filtro.
     op_a = testes[0]['op_a'] if testes else 'N/A'
     op_b = testes[0]['op_b'] if testes else 'N/A'
-    
-    # Serializa a lista de testes em uma string JSON para armazenar em uma única "célula".
     testes_json = json.dumps(testes)
-
     new_occurrence = {
         'ID': new_id,
         'Data de Registro': now,
@@ -56,10 +65,9 @@ def register_full_occurrence(user_email, title, testes):
         'Status': 'REGISTRADO',
         'Operadora A': op_a,
         'Operadora B': op_b,
-        'Testes': testes_json # Armazena todos os detalhes dos testes aqui.
+        'Testes': testes_json
     }
     _call_occurrences_db.append(new_occurrence)
-    print(f"DEBUG: Nova ocorrência de chamada registrada: {new_occurrence}")
     return True
 
 def get_pending_requests(): return [user for user in _users_db if user["status"] == "pending"]
