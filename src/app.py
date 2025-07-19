@@ -1,8 +1,8 @@
 import customtkinter as ctk
 import threading
 from tkinter import messagebox
+from customtkinter import filedialog
 
-# Importações diretas, pois 'main.py' configurou o caminho.
 from services import auth_service, sheets_service
 from views.login_view import LoginView
 from views.main_menu_view import MainMenuView
@@ -32,9 +32,6 @@ class App(ctk.CTk):
         self.user_profile = {}
         self.testes_adicionados = []
         self.editing_index = None
-        
-        # ALTERAÇÃO AQUI: Nova variável para armazenar a lista de operadoras.
-        # Isto garante que o atributo sempre existe, evitando o AttributeError.
         self.operator_list = []
 
         container = ctk.CTkFrame(self)
@@ -51,43 +48,58 @@ class App(ctk.CTk):
         self.check_initial_login()
 
     def show_frame(self, page_name):
-        """Eleva um frame (tela) para o topo, tornando-o visível."""
         frame = self.frames[page_name]
         if hasattr(frame, 'on_show'):
             frame.on_show()
         frame.tkraise()
 
     def check_initial_login(self):
-        """Verifica as credenciais no início da aplicação."""
-        # ALTERAÇÃO AQUI: Carrega a lista de operadoras em segundo plano.
         threading.Thread(target=self.load_operators, daemon=True).start()
         
         self.credentials = auth_service.load_credentials()
         if self.credentials:
-            self.frames["LoginView"].set_loading_state(
-                "Verificando credenciais...")
-            threading.Thread(target=self._fetch_user_profile,
-                             daemon=True).start()
+            self.frames["LoginView"].set_loading_state("Verificando credenciais...")
+            threading.Thread(target=self._fetch_user_profile, daemon=True).start()
         else:
             self.show_frame("LoginView")
 
-    # ALTERAÇÃO AQUI: Nova função para carregar as operadoras do serviço.
     def load_operators(self):
-        """Carrega a lista de operadoras do serviço."""
         self.operator_list = sheets_service.get_all_operators()
-        # Atualiza o widget na RegistrationView se ele já foi criado
         if "RegistrationView" in self.frames:
             self.frames["RegistrationView"].set_operator_suggestions(self.operator_list)
 
+    def export_analysis_to_csv(self, data_list):
+        try:
+            filepath = filedialog.asksaveasfilename(
+                defaultextension=".csv",
+                filetypes=[("Arquivos CSV", "*.csv"), ("Todos os arquivos", "*.*")],
+                title="Salvar Relatório CSV"
+            )
+            if not filepath: return
+            threading.Thread(
+                target=self._write_csv_thread,
+                args=(data_list, filepath),
+                daemon=True
+            ).start()
+        except Exception as e:
+            messagebox.showerror("Erro ao Exportar", f"Ocorreu um erro inesperado:\n{e}")
+
+    def _write_csv_thread(self, data_list, filepath):
+        success, message = sheets_service.write_to_csv(data_list, filepath)
+        if success:
+            self.after(0, lambda: messagebox.showinfo("Exportação Concluída", message))
+        else:
+            self.after(0, lambda: messagebox.showerror("Erro na Exportação", message))
+
+    # ALTERAÇÃO AQUI: Nova função para obter a lista de empresas para o filtro
+    def get_partner_companies(self):
+        return sheets_service.get_all_partner_companies()
+
     def perform_login(self):
-        """Inicia o fluxo de login do Google."""
-        self.frames["LoginView"].set_loading_state(
-            "Aguarde... Abrindo o navegador")
-        threading.Thread(target=self._run_login_flow_in_thread,
-                         daemon=True).start()
+        self.frames["LoginView"].set_loading_state("Aguarde... Abrindo o navegador")
+        threading.Thread(target=self._run_login_flow_in_thread, daemon=True).start()
 
     def _run_login_flow_in_thread(self):
-        """Executa o login numa thread separada."""
         creds = auth_service.run_login_flow()
         if creds:
             auth_service.save_credentials(creds)
@@ -97,24 +109,19 @@ class App(ctk.CTk):
             self.after(0, self._login_failed)
 
     def _fetch_user_profile(self):
-        """Busca o perfil do usuário."""
         self.user_email = auth_service.get_user_email(self.credentials)
         if "Erro" in self.user_email:
-            self.after(0, lambda: messagebox.showerror(
-                "Erro de Autenticação", "Não foi possível obter o seu e-mail do Google."))
+            self.after(0, lambda: messagebox.showerror("Erro de Autenticação", "Não foi possível obter o seu e-mail do Google."))
             self.after(0, self.perform_logout)
             return
-
         self.user_profile = sheets_service.check_user_status(self.user_email)
         self.after(0, self.navigate_based_on_status)
 
     def navigate_based_on_status(self):
-        """Navega para a tela correta com base no status do usuário."""
         status = self.user_profile.get("status")
         if status == "approved":
             main_menu = self.frames["MainMenuView"]
-            main_menu.update_user_info(
-                self.user_email, self.user_profile.get("username", ""))
+            main_menu.update_user_info(self.user_email, self.user_profile.get("username", ""))
             main_menu.update_buttons(self.user_profile.get("role"))
             self.show_frame("MainMenuView")
         elif status == "pending":
@@ -124,13 +131,10 @@ class App(ctk.CTk):
             self.show_frame("RequestAccessView")
 
     def _login_failed(self):
-        """Lida com falhas no login."""
-        messagebox.showerror(
-            "Falha no Login", "O processo de login foi cancelado ou falhou.")
+        messagebox.showerror("Falha no Login", "O processo de login foi cancelado ou falhou.")
         self.frames["LoginView"].set_default_state()
 
     def perform_logout(self):
-        """Realiza o logout do usuário."""
         auth_service.logout()
         self.user_email = None
         self.credentials = None
@@ -138,16 +142,13 @@ class App(ctk.CTk):
         self.show_frame("LoginView")
         self.frames["LoginView"].set_default_state()
 
-    def submit_access_request(self, full_name, username, role):
-        """Envia uma nova solicitação de acesso."""
+    # ALTERAÇÃO AQUI: A função agora aceita 'company_name'
+    def submit_access_request(self, full_name, username, role, company_name=None):
         if not full_name or not username or not role:
-            messagebox.showwarning("Campos Obrigatórios",
-                                   "Por favor, preencha todos os campos.")
+            messagebox.showwarning("Campos Obrigatórios", "Por favor, preencha todos os campos.")
             return
-        sheets_service.request_access(
-            self.user_email, full_name, username, role)
-        messagebox.showinfo("Solicitação Enviada",
-                            "Sua solicitação de acesso foi enviada.")
+        sheets_service.request_access(self.user_email, full_name, username, role, company_name)
+        messagebox.showinfo("Solicitação Enviada", "Sua solicitação de acesso foi enviada.")
         self.show_frame("PendingApprovalView")
 
     def get_pending_requests(self):
@@ -155,8 +156,7 @@ class App(ctk.CTk):
 
     def update_user_access(self, email, new_status):
         sheets_service.update_user_status(email, new_status)
-        messagebox.showinfo(
-            "Sucesso", f"O acesso para {email} foi atualizado para '{new_status}'.")
+        messagebox.showinfo("Sucesso", f"O acesso para {email} foi atualizado para '{new_status}'.")
         self.frames["AdminDashboardView"].load_access_requests()
 
     def get_all_occurrences(self, status_filter=None, role_filter=None, search_term=None):
@@ -164,13 +164,11 @@ class App(ctk.CTk):
 
     def save_occurrence_status_changes(self, changes):
         if not changes:
-            messagebox.showinfo("Nenhuma Alteração",
-                                "Nenhum status foi alterado.")
+            messagebox.showinfo("Nenhuma Alteração", "Nenhum status foi alterado.")
             return
         for occ_id, new_status in changes.items():
             sheets_service.update_occurrence_status(occ_id, new_status)
-        messagebox.showinfo(
-            "Sucesso", f"{len(changes)} alterações de status foram salvas com sucesso.")
+        messagebox.showinfo("Sucesso", f"{len(changes)} alterações de status foram salvas com sucesso.")
         self.frames["AdminDashboardView"].load_all_occurrences()
 
     def get_all_users(self):
@@ -178,15 +176,13 @@ class App(ctk.CTk):
 
     def update_user_role(self, email, new_role):
         sheets_service.update_user_role(email, new_role)
-        messagebox.showinfo(
-            "Sucesso", f"O perfil de {email} foi atualizado para '{new_role}'.")
+        messagebox.showinfo("Sucesso", f"O perfil de {email} foi atualizado para '{new_role}'.")
         self.frames["AdminDashboardView"].load_all_users()
 
     def get_user_occurrences(self, search_term=None):
         return sheets_service.get_occurrences_by_user(self.credentials, self.user_email, search_term)
 
     def get_current_user_role(self):
-        """Retorna o perfil do usuário logado."""
         return self.user_profile.get("role")
 
     def submit_simple_call_occurrence(self, form_data):
@@ -208,11 +204,7 @@ class App(ctk.CTk):
             return
         view = self.frames["RegistrationView"]
         view.set_submitting_state(True)
-        threading.Thread(
-            target=self._submit_full_occurrence_thread,
-            args=(title, self.testes_adicionados),
-            daemon=True
-        ).start()
+        threading.Thread(target=self._submit_full_occurrence_thread, args=(title, self.testes_adicionados), daemon=True).start()
 
     def _submit_full_occurrence_thread(self, title, testes):
         sheets_service.register_full_occurrence(self.user_email, title, testes)
