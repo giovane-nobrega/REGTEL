@@ -96,7 +96,7 @@ class RegistrationView(ctk.CTkFrame):
             row=2, column=3, rowspan=5, padx=10, pady=(0, 10), sticky="nsew")
 
         # Frame 3: Lista de Testes
-        ctk.CTkLabel(test_list_frame, text="3. Testes a Serem Registrados (mínimo 3)", font=ctk.CTkFont(
+        ctk.CTkLabel(test_list_frame, text="3. Testes a Serem Registrados", font=ctk.CTkFont(
             size=16, weight="bold")).grid(row=0, column=0, sticky="w", padx=10, pady=(10, 5))
         self.scrollable_test_list = ctk.CTkScrollableFrame(
             test_list_frame, label_text="Nenhum teste adicionado ainda.")

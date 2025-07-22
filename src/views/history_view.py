@@ -10,7 +10,7 @@ class HistoryView(ctk.CTkFrame):
         
         # --- Configuração da Responsividade da Grelha Principal ---
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(2, weight=1) # A linha 2 (lista rolável) expande
+        self.grid_rowconfigure(2, weight=1)
         
         self.title_label = ctk.CTkLabel(self, text="Meu Histórico de Ocorrências", font=ctk.CTkFont(size=24, weight="bold"))
         self.title_label.grid(row=0, column=0, padx=20, pady=(10, 10), sticky="ew")
@@ -64,29 +64,38 @@ class HistoryView(ctk.CTkFrame):
         for item in occurrences:
             item_id = item.get('ID', 'N/A')
             
-            card_button = ctk.CTkButton(
-                self.history_scrollable_frame, 
-                text="", 
-                fg_color=ctk.ThemeManager.theme["CTkFrame"]["fg_color"],
-                hover_color=ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"],
-                command=partial(self.controller.show_occurrence_details, item_id)
-            )
-            card_button.pack(fill="x", padx=5, pady=5)
-            card_button.grid_columnconfigure(0, weight=1)
+            # ALTERAÇÃO AQUI: O 'card' agora é um Frame normal, não um botão.
+            card_frame = ctk.CTkFrame(self.history_scrollable_frame)
+            card_frame.pack(fill="x", padx=5, pady=5)
+            card_frame.grid_columnconfigure(0, weight=1) # Coluna para as informações
+            card_frame.grid_columnconfigure(1, weight=0) # Coluna para o botão
+
+            # Frame para agrupar os textos
+            info_frame = ctk.CTkFrame(card_frame, fg_color="transparent")
+            info_frame.grid(row=0, column=0, padx=10, pady=5, sticky="w")
             
             title = item.get('Título da Ocorrência', item.get('Tipo de Equipamento', 'N/A'))
             date = item.get('Data de Registro', 'N/A')
             status = item.get('Status', 'N/A')
             
-            title_label = ctk.CTkLabel(card_button, text=f"ID: {item_id} - {title}", font=ctk.CTkFont(size=14, weight="bold"), anchor="w")
-            title_label.grid(row=0, column=0, sticky="ew", padx=10, pady=(5, 0))
+            title_label = ctk.CTkLabel(info_frame, text=f"ID: {item_id} - {title}", font=ctk.CTkFont(size=14, weight="bold"), anchor="w")
+            title_label.pack(anchor="w")
             
             details_text = f"Registrado em: {date}"
             if user_role == 'admin':
                 details_text += f" por: {item.get('Email do Registrador', 'N/A')}"
 
-            details_label = ctk.CTkLabel(card_button, text=details_text, anchor="w", text_color="gray60")
-            details_label.grid(row=1, column=0, sticky="w", padx=10, pady=(0,5))
+            details_label = ctk.CTkLabel(info_frame, text=details_text, anchor="w", text_color="gray60")
+            details_label.pack(anchor="w")
             
-            status_label = ctk.CTkLabel(card_button, text=f"Status: {status}", anchor="e", font=ctk.CTkFont(weight="bold"))
-            status_label.grid(row=0, column=1, rowspan=2, sticky="e", padx=10, pady=(0,5))
+            status_label = ctk.CTkLabel(info_frame, text=f"Status: {status}", anchor="w", font=ctk.CTkFont(weight="bold"))
+            status_label.pack(anchor="w")
+
+            # ALTERAÇÃO AQUI: Adicionado um botão "Abrir" explícito.
+            open_button = ctk.CTkButton(
+                card_frame,
+                text="Abrir",
+                width=80,
+                command=partial(self.controller.show_occurrence_details, item_id)
+            )
+            open_button.grid(row=0, column=1, padx=10, pady=10, sticky="e")
