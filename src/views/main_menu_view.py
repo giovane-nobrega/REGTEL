@@ -45,8 +45,6 @@ class MainMenuView(ctk.CTkFrame):
         if role == "admin":
             self.admin_button.grid(row=next_row, column=0, pady=8, padx=20)
             next_row += 1
-        # ALTERAÇÃO AQUI: A lógica "role in [...]" já inclui o novo perfil "telecom_user",
-        # garantindo que ele veja o mesmo botão de registo detalhado que os parceiros.
         elif role in ["partner", "telecom_user"]:
             self.partner_button.grid(row=next_row, column=0, pady=8, padx=20)
             next_row += 1

@@ -64,13 +64,11 @@ class HistoryView(ctk.CTkFrame):
         for item in occurrences:
             item_id = item.get('ID', 'N/A')
             
-            # ALTERAÇÃO AQUI: O 'card' agora é um Frame normal, não um botão.
             card_frame = ctk.CTkFrame(self.history_scrollable_frame)
             card_frame.pack(fill="x", padx=5, pady=5)
-            card_frame.grid_columnconfigure(0, weight=1) # Coluna para as informações
-            card_frame.grid_columnconfigure(1, weight=0) # Coluna para o botão
+            card_frame.grid_columnconfigure(0, weight=1)
+            card_frame.grid_columnconfigure(1, weight=0)
 
-            # Frame para agrupar os textos
             info_frame = ctk.CTkFrame(card_frame, fg_color="transparent")
             info_frame.grid(row=0, column=0, padx=10, pady=5, sticky="w")
             
@@ -91,7 +89,6 @@ class HistoryView(ctk.CTkFrame):
             status_label = ctk.CTkLabel(info_frame, text=f"Status: {status}", anchor="w", font=ctk.CTkFont(weight="bold"))
             status_label.pack(anchor="w")
 
-            # ALTERAÇÃO AQUI: Adicionado um botão "Abrir" explícito.
             open_button = ctk.CTkButton(
                 card_frame,
                 text="Abrir",

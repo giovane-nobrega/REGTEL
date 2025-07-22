@@ -96,8 +96,9 @@ class RegistrationView(ctk.CTkFrame):
             row=2, column=3, rowspan=5, padx=10, pady=(0, 10), sticky="nsew")
 
         # Frame 3: Lista de Testes
-        ctk.CTkLabel(test_list_frame, text="3. Testes a Serem Registrados", font=ctk.CTkFont(
-            size=16, weight="bold")).grid(row=0, column=0, sticky="w", padx=10, pady=(10, 5))
+        self.test_list_label = ctk.CTkLabel(test_list_frame, text="3. Testes a Serem Registrados", font=ctk.CTkFont(
+            size=16, weight="bold"))
+        self.test_list_label.grid(row=0, column=0, sticky="w", padx=10, pady=(10, 5))
         self.scrollable_test_list = ctk.CTkScrollableFrame(
             test_list_frame, label_text="Nenhum teste adicionado ainda.")
         self.scrollable_test_list.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
@@ -115,6 +116,13 @@ class RegistrationView(ctk.CTkFrame):
         self.entry_op_b.set_suggestions(operators)
 
     def on_show(self):
+        # ALTERAÇÃO AQUI: O texto do título da lista de testes agora é dinâmico.
+        role = self.controller.get_current_user_role()
+        if role == 'partner':
+            self.test_list_label.configure(text="3. Testes a Serem Registrados (mínimo 3)")
+        else:
+            self.test_list_label.configure(text="3. Testes a Serem Registrados")
+
         self.controller.testes_adicionados = []
         self.controller.editing_index = None
         self.entry_ocorrencia_titulo.delete(0, 'end')

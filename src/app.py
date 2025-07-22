@@ -18,7 +18,6 @@ from views.occurrence_detail_view import OccurrenceDetailView
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        
         self.title("Plataforma de Registro de Ocorrências (Craft Quest)")
         self.geometry("900x750")
         self.minsize(800, 650)
@@ -37,10 +36,8 @@ class App(ctk.CTk):
         container.pack(fill="both", expand=True)
 
         self.frames = {}
-        view_classes = (LoginView, RequestAccessView, PendingApprovalView, MainMenuView,
-                        AdminDashboardView, RegistrationView, SimpleCallView, EquipmentView, HistoryView)
-        
-        for F in view_classes:
+        for F in (LoginView, RequestAccessView, PendingApprovalView, MainMenuView,
+                  AdminDashboardView, RegistrationView, SimpleCallView, EquipmentView, HistoryView):
             page_name = F.__name__
             frame = F(parent=container, controller=self)
             self.frames[page_name] = frame
@@ -66,6 +63,8 @@ class App(ctk.CTk):
             messagebox.showerror("Erro", "Não foi possível encontrar os detalhes para a ocorrência selecionada.")
 
     def check_initial_login(self):
+        threading.Thread(target=self.load_operators, daemon=True).start()
+        
         self.credentials = auth_service.load_credentials()
         if self.credentials:
             self.frames["LoginView"].set_loading_state("Verificando credenciais...")
@@ -73,13 +72,10 @@ class App(ctk.CTk):
         else:
             self.show_frame("LoginView")
 
-    def load_secondary_data(self):
-        threading.Thread(target=self._load_operators_thread, daemon=True).start()
-
-    def _load_operators_thread(self):
+    def load_operators(self):
         self.operator_list = sheets_service.get_all_operators()
         if "RegistrationView" in self.frames:
-            self.after(0, self.frames["RegistrationView"].set_operator_suggestions, self.operator_list)
+            self.frames["RegistrationView"].set_operator_suggestions(self.operator_list)
 
     def export_analysis_to_csv(self, data_list):
         try:
@@ -132,7 +128,6 @@ class App(ctk.CTk):
     def navigate_based_on_status(self):
         status = self.user_profile.get("status")
         if status == "approved":
-            self.load_secondary_data()
             main_menu = self.frames["MainMenuView"]
             main_menu.update_user_info(self.user_email, self.user_profile.get("username", ""))
             main_menu.update_buttons(self.user_profile.get("role"))
@@ -224,15 +219,12 @@ class App(ctk.CTk):
         self.after(0, self._on_submission_success, "EquipmentView")
 
     def submit_full_occurrence(self, title):
-        # ALTERAÇÃO AQUI: A validação do número de testes agora depende do perfil do utilizador.
-        role = self.get_current_user_role()
         if not title:
             messagebox.showwarning("Campo Obrigatório", "O título da ocorrência é obrigatório.")
             return
-        if role == 'partner' and len(self.testes_adicionados) < 3:
+        if len(self.testes_adicionados) < 3:
             messagebox.showwarning("Validação Falhou", "É necessário adicionar pelo menos 3 testes de ligação como evidência.")
             return
-        
         view = self.frames["RegistrationView"]
         view.set_submitting_state(True)
         threading.Thread(target=self._submit_full_occurrence_thread, args=(title, self.testes_adicionados), daemon=True).start()
@@ -242,6 +234,7 @@ class App(ctk.CTk):
         self.after(0, self._on_submission_success, "RegistrationView")
 
     def _on_submission_success(self, view_name):
+        """Callback genérico para quando uma submissão é bem-sucedida."""
         messagebox.showinfo("Sucesso", "Ocorrência registrada com sucesso!")
         view = self.frames[view_name]
         if hasattr(view, 'set_submitting_state'):

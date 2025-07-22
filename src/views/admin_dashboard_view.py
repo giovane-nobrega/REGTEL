@@ -93,9 +93,9 @@ class AdminDashboardView(ctk.CTkFrame):
         self.controller.export_analysis_to_csv(self.current_analysis_list)
 
     def _update_group_filter(self):
+        """Busca a lista de empresas e atualiza o menu de filtro."""
         companies = self.controller.get_partner_companies()
-        # ALTERAÇÃO AQUI: Adicionada a nova opção de filtro para "Usuários 67 Telecom".
-        options = ["Todos", "Prefeitura", "Parceiros (Geral)", "Usuários 67 Telecom"] + companies
+        options = ["Todos", "Prefeitura", "Parceiros (Geral)"] + companies
         self.role_filter_menu.configure(values=options)
         self.role_filter_menu.set("Todos")
 
@@ -103,13 +103,10 @@ class AdminDashboardView(ctk.CTkFrame):
         status = self.status_filter_menu.get()
         role_selection = self.role_filter_menu.get()
 
-        # ALTERAÇÃO AQUI: Mapeamento atualizado para incluir o novo perfil.
         if role_selection == "Parceiros (Geral)":
             role_filter = "partner"
         elif role_selection == "Prefeitura":
             role_filter = "prefeitura"
-        elif role_selection == "Usuários 67 Telecom":
-            role_filter = "telecom_user"
         else:
             role_filter = role_selection
 
@@ -281,8 +278,7 @@ class AdminDashboardView(ctk.CTkFrame):
             self.all_users_frame.configure(label_text="Nenhum usuário encontrado.")
             return
         self.all_users_frame.configure(label_text="")
-        # ALTERAÇÃO AQUI: Adicionado "telecom_user" às opções de perfil que um admin pode atribuir.
-        role_options = ["admin", "partner", "prefeitura", "telecom_user"]
+        role_options = ["admin", "partner", "prefeitura"]
         for user in all_users_list:
             email = user.get('email')
             self.original_roles[email] = user.get('role')

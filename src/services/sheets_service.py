@@ -4,6 +4,7 @@ import json
 import csv
 
 # --- BANCO DE DADOS SIMULADO ---
+
 _users_db = [
     {"email": "giovane67telecom@gmail.com", "name": "GIOVANI FERREIRA", "username": "gferreira", "role": "admin", "status": "approved"},
     {"email": "parceiro@exemplo.com", "name": "PARCEIRO EXEMPLO", "username": "parceiro", "role": "partner", "company": "M2 TELECOMUNICAÇÕES", "status": "approved"},
@@ -13,17 +14,18 @@ _users_db = [
     {"email": "parceiro67@exemplo.com", "name": "PARCEIRO 67 INTERNET", "username": "parceiro67", "role": "partner", "company": "67 INTERNET", "status": "approved"},
     {"email": "user67@exemplo.com", "name": "USUÁRIO 67 TELECOM", "username": "user67", "role": "telecom_user", "status": "approved"},
 ]
+
 _call_occurrences_db = [
     {'ID': 'CALL-001', 'Data de Registro': '2025-06-30 15:00:12', 'Título da Ocorrência': 'CHIADO EM LIGAÇÕES PARA VIVO (EXEMPLO)', 'Email do Registrador': 'parceiro@exemplo.com', 'Status': 'RESOLVIDO', 'Operadora A': 'VIVO FIXO', 'Operadora B': 'CLARO FIXO', 'Testes': '[{"horario": "15:00", "num_a": "67999991111", "op_a": "VIVO", "num_b": "6734212222", "op_b": "OI", "status": "CHIADO", "obs": "TESTE 1"}]'}, 
     {'ID': 'CALL-002', 'Data de Registro': '2025-07-01 09:05:45', 'Título da Ocorrência': 'CHAMADAS MUDAS PARA TIM (EXEMPLO)', 'Email do Registrador': 'parceiro@exemplo.com', 'Status': 'EM ANÁLISE', 'Operadora A': 'OUTRA', 'Operadora B': 'TIM', 'Testes': '[]'},
     {'ID': 'CALL-003', 'Data de Registro': '2025-07-02 10:00:00', 'Título da Ocorrência': 'CHAMADA DE (67) 99999-1111 PARA (67) 3421-2222', 'Email do Registrador': 'joao.silva@prefeitura.example.com', 'Status': 'REGISTRADO', 'Operadora A': 'VIVO FIXO', 'Operadora B': 'OI FIXO', 'Testes': '[]'}
 ]
+
 _equipment_occurrences_db = [{'ID': 'EQUIP-001', 'Data de Registro': '2025-07-01 11:30:00', 'Tipo de Equipamento': 'TELEFONE IP', 'Email do Registrador': 'joao.silva@prefeitura.example.com', 'Status': 'REGISTRADO'}]
 
 # --- FUNÇÕES DE SERVIÇO ---
 
 def register_equipment_occurrence(user_email, data):
-    """Adiciona uma nova ocorrência de equipamento à base de dados."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     new_id = f"EQUIP-{len(_equipment_occurrences_db) + 1:03d}"
     
@@ -42,7 +44,6 @@ def register_equipment_occurrence(user_email, data):
     return True
 
 def register_simple_call_occurrence(user_email, data):
-    """Adiciona uma nova ocorrência de chamada simplificada à base de dados."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     new_id = f"CALL-{len(_call_occurrences_db) + 1:03d}"
 
@@ -55,13 +56,12 @@ def register_simple_call_occurrence(user_email, data):
         'Email do Registrador': user_email,
         'Status': 'REGISTRADO',
         'Descrição do Problema': data.get('descricao'),
-        'Testes': '[]' # Campo existe para consistência
+        'Testes': '[]'
     }
     _call_occurrences_db.append(new_occurrence)
     return True
 
 def get_occurrence_by_id(occurrence_id):
-    """Encontra e retorna uma ocorrência específica pelo seu ID."""
     all_occurrences = _call_occurrences_db + _equipment_occurrences_db
     for occ in all_occurrences:
         if occ.get('ID') == occurrence_id:

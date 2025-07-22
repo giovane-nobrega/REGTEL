@@ -6,6 +6,7 @@ class RequestAccessView(ctk.CTkFrame):
         super().__init__(parent)
         self.controller = controller
         
+        # --- Configuração da Responsividade ---
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
         
@@ -27,14 +28,13 @@ class RequestAccessView(ctk.CTkFrame):
         self.username_entry.pack(pady=(0,10), padx=20, fill="x")
         
         ctk.CTkLabel(center_frame, text="Selecione seu vínculo:").pack(anchor="w", padx=20)
-        # ALTERAÇÃO AQUI: Adicionada a nova opção "Colaboradores 67".
-        self.role_combobox = ctk.CTkComboBox(center_frame, values=["Prefeitura", "Parceiro", "Colaboradores 67"], width=300, command=self._on_role_selected)
+        self.role_combobox = ctk.CTkComboBox(center_frame, values=["Prefeitura", "Parceiro"], width=300, command=self._on_role_selected)
         self.role_combobox.pack(pady=(0,10), padx=20, fill="x")
         self.role_combobox.set("Prefeitura")
 
         self.company_name_label = ctk.CTkLabel(center_frame, text="Selecione a Empresa Parceira:")
-        self.company_list = ["M2 TELECOMUNICAÇÕES", "MDA FIBRA", "DISK SISTEMA TELECOM", "GMN TELECOM", "67 INTERNET"]
-        self.company_name_combobox = ctk.CTkComboBox(center_frame, values=self.company_list, width=300)
+        company_list = ["M2 TELECOMUNICAÇÕES", "MDA FIBRA", "DISK SISTEMA TELECOM", "GMN TELECOM"]
+        self.company_name_combobox = ctk.CTkComboBox(center_frame, values=company_list, width=300)
         
         self.submit_button = ctk.CTkButton(center_frame, text="Enviar Solicitação", command=self.submit, height=40)
         self.submit_button.pack(pady=20, padx=20, fill="x")
@@ -67,7 +67,7 @@ class RequestAccessView(ctk.CTkFrame):
         company_name = None
         if role == "Parceiro":
             company_name = self.company_name_combobox.get()
-            if not company_name or company_name not in self.company_list:
+            if not company_name or company_name not in ["M2 TELECOMUNICAÇÕES", "MDA FIBRA", "DISK SISTEMA TELECOM", "GMN TELECOM"]:
                 messagebox.showwarning("Campo Obrigatório", "A seleção da empresa parceira é obrigatória.")
                 return
 
