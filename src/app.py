@@ -12,15 +12,13 @@ from views.registration_view import RegistrationView
 from views.simple_call_view import SimpleCallView
 from views.equipment_view import EquipmentView
 from views.history_view import HistoryView
+from views.occurrence_detail_view import OccurrenceDetailView
 
 
 class App(ctk.CTk):
-    """
-    Classe principal da aplicação. Atua como o controlador central.
-    """
-
     def __init__(self):
         super().__init__()
+        
         self.title("Plataforma de Registro de Ocorrências (Craft Quest)")
         self.geometry("900x750")
         self.minsize(800, 650)
@@ -33,13 +31,16 @@ class App(ctk.CTk):
         self.testes_adicionados = []
         self.editing_index = None
         self.operator_list = []
+        self.detail_window = None
 
         container = ctk.CTkFrame(self)
         container.pack(fill="both", expand=True)
 
         self.frames = {}
-        for F in (LoginView, RequestAccessView, PendingApprovalView, MainMenuView,
-                  AdminDashboardView, RegistrationView, SimpleCallView, EquipmentView, HistoryView):
+        view_classes = (LoginView, RequestAccessView, PendingApprovalView, MainMenuView,
+                        AdminDashboardView, RegistrationView, SimpleCallView, EquipmentView, HistoryView)
+        
+        for F in view_classes:
             page_name = F.__name__
             frame = F(parent=container, controller=self)
             self.frames[page_name] = frame
@@ -53,9 +54,18 @@ class App(ctk.CTk):
             frame.on_show()
         frame.tkraise()
 
+    def show_occurrence_details(self, occurrence_id):
+        if self.detail_window is not None and self.detail_window.winfo_exists():
+            self.detail_window.focus()
+            return
+
+        occurrence_data = sheets_service.get_occurrence_by_id(occurrence_id)
+        if occurrence_data:
+            self.detail_window = OccurrenceDetailView(self, occurrence_data)
+        else:
+            messagebox.showerror("Erro", "Não foi possível encontrar os detalhes para a ocorrência selecionada.")
+
     def check_initial_login(self):
-        threading.Thread(target=self.load_operators, daemon=True).start()
-        
         self.credentials = auth_service.load_credentials()
         if self.credentials:
             self.frames["LoginView"].set_loading_state("Verificando credenciais...")
@@ -63,10 +73,13 @@ class App(ctk.CTk):
         else:
             self.show_frame("LoginView")
 
-    def load_operators(self):
+    def load_secondary_data(self):
+        threading.Thread(target=self._load_operators_thread, daemon=True).start()
+
+    def _load_operators_thread(self):
         self.operator_list = sheets_service.get_all_operators()
         if "RegistrationView" in self.frames:
-            self.frames["RegistrationView"].set_operator_suggestions(self.operator_list)
+            self.after(0, self.frames["RegistrationView"].set_operator_suggestions, self.operator_list)
 
     def export_analysis_to_csv(self, data_list):
         try:
@@ -91,7 +104,6 @@ class App(ctk.CTk):
         else:
             self.after(0, lambda: messagebox.showerror("Erro na Exportação", message))
 
-    # ALTERAÇÃO AQUI: Nova função para obter a lista de empresas para o filtro
     def get_partner_companies(self):
         return sheets_service.get_all_partner_companies()
 
@@ -120,6 +132,7 @@ class App(ctk.CTk):
     def navigate_based_on_status(self):
         status = self.user_profile.get("status")
         if status == "approved":
+            self.load_secondary_data()
             main_menu = self.frames["MainMenuView"]
             main_menu.update_user_info(self.user_email, self.user_profile.get("username", ""))
             main_menu.update_buttons(self.user_profile.get("role"))
@@ -142,7 +155,6 @@ class App(ctk.CTk):
         self.show_frame("LoginView")
         self.frames["LoginView"].set_default_state()
 
-    # ALTERAÇÃO AQUI: A função agora aceita 'company_name'
     def submit_access_request(self, full_name, username, role, company_name=None):
         if not full_name or not username or not role:
             messagebox.showwarning("Campos Obrigatórios", "Por favor, preencha todos os campos.")
@@ -186,32 +198,52 @@ class App(ctk.CTk):
         return self.user_profile.get("role")
 
     def submit_simple_call_occurrence(self, form_data):
-        print("Submetendo ocorrência de chamada simples:", form_data)
-        messagebox.showinfo("Sucesso", "Ocorrência de chamada simples registrada!")
-        self.show_frame("MainMenuView")
+        view = self.frames["SimpleCallView"]
+        view.set_submitting_state(True)
+        threading.Thread(
+            target=self._submit_simple_call_thread,
+            args=(form_data,),
+            daemon=True
+        ).start()
+
+    def _submit_simple_call_thread(self, form_data):
+        sheets_service.register_simple_call_occurrence(self.user_email, form_data)
+        self.after(0, self._on_submission_success, "SimpleCallView")
 
     def submit_equipment_occurrence(self, data):
-        print("Submetendo ocorrência de equipamento:", data)
-        messagebox.showinfo("Sucesso", "Ocorrência de equipamento registrada!")
-        self.show_frame("MainMenuView")
+        view = self.frames["EquipmentView"]
+        view.set_submitting_state(True)
+        threading.Thread(
+            target=self._submit_equipment_thread,
+            args=(data,),
+            daemon=True
+        ).start()
+
+    def _submit_equipment_thread(self, data):
+        sheets_service.register_equipment_occurrence(self.user_email, data)
+        self.after(0, self._on_submission_success, "EquipmentView")
 
     def submit_full_occurrence(self, title):
+        # ALTERAÇÃO AQUI: A validação do número de testes agora depende do perfil do utilizador.
+        role = self.get_current_user_role()
         if not title:
             messagebox.showwarning("Campo Obrigatório", "O título da ocorrência é obrigatório.")
             return
-        if len(self.testes_adicionados) < 3:
+        if role == 'partner' and len(self.testes_adicionados) < 3:
             messagebox.showwarning("Validação Falhou", "É necessário adicionar pelo menos 3 testes de ligação como evidência.")
             return
+        
         view = self.frames["RegistrationView"]
         view.set_submitting_state(True)
         threading.Thread(target=self._submit_full_occurrence_thread, args=(title, self.testes_adicionados), daemon=True).start()
 
     def _submit_full_occurrence_thread(self, title, testes):
         sheets_service.register_full_occurrence(self.user_email, title, testes)
-        self.after(0, self._on_full_occurrence_submitted)
+        self.after(0, self._on_submission_success, "RegistrationView")
 
-    def _on_full_occurrence_submitted(self):
+    def _on_submission_success(self, view_name):
         messagebox.showinfo("Sucesso", "Ocorrência registrada com sucesso!")
-        view = self.frames["RegistrationView"]
-        view.set_submitting_state(False)
+        view = self.frames[view_name]
+        if hasattr(view, 'set_submitting_state'):
+            view.set_submitting_state(False)
         self.show_frame("MainMenuView")

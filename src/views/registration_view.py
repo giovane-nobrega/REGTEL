@@ -1,33 +1,34 @@
 import customtkinter as ctk
 from tkinter import messagebox
 from functools import partial
-# ALTERAÇÃO AQUI: Usa um import relativo para maior robustez
 from .autocomplete_widget import AutocompleteEntry
 
 
 class RegistrationView(ctk.CTkFrame):
-    """Tela para o registro detalhado de ocorrências (Parceiro)."""
-
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
 
-        # --- Estrutura da Tela ---
-        final_buttons_frame = ctk.CTkFrame(self, fg_color="transparent")
-        final_buttons_frame.pack(
-            side="bottom", fill="x", padx=10, pady=(5, 10))
-        final_buttons_frame.grid_columnconfigure((0, 1), weight=1)
-
-        main_occurrence_frame = ctk.CTkFrame(self)
-        main_occurrence_frame.pack(side="top", fill="x", padx=10, pady=(10, 5))
-
-        test_entry_frame = ctk.CTkFrame(self)
-        test_entry_frame.pack(side="top", fill="x", padx=10, pady=5)
-
-        test_list_frame = ctk.CTkFrame(self)
-        test_list_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        # --- Configuração da Responsividade ---
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(2, weight=1) # A linha 2 (lista de testes) expande
 
         # --- Widgets ---
+        main_occurrence_frame = ctk.CTkFrame(self)
+        main_occurrence_frame.grid(row=0, column=0, padx=10, pady=(10, 5), sticky="ew")
+        
+        test_entry_frame = ctk.CTkFrame(self)
+        test_entry_frame.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
+        
+        test_list_frame = ctk.CTkFrame(self)
+        test_list_frame.grid(row=2, column=0, padx=10, pady=5, sticky="nsew")
+        test_list_frame.grid_rowconfigure(1, weight=1)
+        test_list_frame.grid_columnconfigure(0, weight=1)
+
+        final_buttons_frame = ctk.CTkFrame(self, fg_color="transparent")
+        final_buttons_frame.grid(row=3, column=0, padx=10, pady=(5, 10), sticky="ew")
+        final_buttons_frame.grid_columnconfigure((0, 1), weight=1)
+
         # Frame 1: Detalhes da Ocorrência
         ctk.CTkLabel(main_occurrence_frame, text="1. Detalhes da Ocorrência de Chamada",
                      font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
@@ -96,11 +97,10 @@ class RegistrationView(ctk.CTkFrame):
 
         # Frame 3: Lista de Testes
         ctk.CTkLabel(test_list_frame, text="3. Testes a Serem Registrados (mínimo 3)", font=ctk.CTkFont(
-            size=16, weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
+            size=16, weight="bold")).grid(row=0, column=0, sticky="w", padx=10, pady=(10, 5))
         self.scrollable_test_list = ctk.CTkScrollableFrame(
             test_list_frame, label_text="Nenhum teste adicionado ainda.")
-        self.scrollable_test_list.pack(
-            fill="both", expand=True, padx=10, pady=5)
+        self.scrollable_test_list.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
 
         # Frame 4: Botões Finais
         self.back_button = ctk.CTkButton(final_buttons_frame, text="Voltar ao Menu", command=lambda: self.controller.show_frame(
@@ -111,12 +111,10 @@ class RegistrationView(ctk.CTkFrame):
         self.submit_button.grid(row=0, column=1, padx=(5, 0), sticky="ew")
 
     def set_operator_suggestions(self, operators):
-        """Recebe a lista de operadoras do controlador e a define nos widgets."""
         self.entry_op_a.set_suggestions(operators)
         self.entry_op_b.set_suggestions(operators)
 
     def on_show(self):
-        """Reseta o estado do formulário sempre que a tela é exibida."""
         self.controller.testes_adicionados = []
         self.controller.editing_index = None
         self.entry_ocorrencia_titulo.delete(0, 'end')
@@ -127,7 +125,6 @@ class RegistrationView(ctk.CTkFrame):
         self.set_operator_suggestions(self.controller.operator_list)
 
     def _clear_test_fields(self):
-        """Limpa os campos de entrada do formulário de teste."""
         self.entry_teste_horario.delete(0, 'end')
         self.entry_teste_num_a.delete(0, 'end')
         self.entry_teste_num_b.delete(0, 'end')
@@ -137,7 +134,6 @@ class RegistrationView(ctk.CTkFrame):
         self.combo_teste_status.set("")
 
     def add_or_update_test(self):
-        """Adiciona ou atualiza um teste de ligação na lista temporária."""
         horario = self.entry_teste_horario.get().upper()
         num_a = self.entry_teste_num_a.get().upper()
         op_a = self.entry_op_a.get().upper()
@@ -166,7 +162,6 @@ class RegistrationView(ctk.CTkFrame):
         self._update_test_display_list()
 
     def _update_test_display_list(self):
-        """Atualiza a lista visual de testes de ligação adicionados."""
         for widget in self.scrollable_test_list.winfo_children():
             widget.destroy()
 
@@ -181,8 +176,7 @@ class RegistrationView(ctk.CTkFrame):
                 self.scrollable_test_list, fg_color=("gray90", "gray25"))
             card_frame.pack(fill="x", pady=5, padx=5)
             card_frame.grid_columnconfigure(0, weight=1)
-            card_frame.grid_columnconfigure(1, weight=0)
-
+            
             info_frame = ctk.CTkFrame(card_frame, fg_color="transparent")
             info_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=5)
             de_para_text = f"De: {teste['num_a']} ({teste['op_a']})  ->  Para: {teste['num_b']} ({teste['op_b']})"

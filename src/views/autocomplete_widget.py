@@ -32,7 +32,7 @@ class AutocompleteEntry(ctk.CTkEntry):
             self._hide_suggestions()
             return
 
-        matches = [s for s in self.suggestions if s.startswith(value)]
+        matches = [s for s in self.suggestions if value in s]
         if matches:
             self._show_suggestions(matches)
         else:
@@ -54,6 +54,9 @@ class AutocompleteEntry(ctk.CTkEntry):
         for match in matches:
             self._suggestion_listbox.insert(tk.END, match)
         
+        listbox_height = min(len(matches), 6)
+        self._suggestion_listbox.config(height=listbox_height)
+        
         x = self.winfo_x()
         y = self.winfo_y() + self.winfo_height()
         width = self.winfo_width()
@@ -73,7 +76,6 @@ class AutocompleteEntry(ctk.CTkEntry):
         if self._suggestion_listbox:
             selected_index = self._suggestion_listbox.curselection()
             if selected_index:
-                # ALTERAÇÃO AQUI: Corrigido o bug para obter o valor da listbox
                 value = self._suggestion_listbox.get(selected_index)
                 self.delete(0, tk.END)
                 self.insert(0, value)

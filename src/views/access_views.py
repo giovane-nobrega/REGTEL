@@ -1,48 +1,89 @@
 import customtkinter as ctk
+from tkinter import messagebox
 
 class RequestAccessView(ctk.CTkFrame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
+        
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        
         center_frame = ctk.CTkFrame(self, fg_color="transparent")
-        center_frame.pack(expand=True)
+        center_frame.grid(row=0, column=0)
+        
         title = ctk.CTkLabel(center_frame, text="Solicitação de Acesso", font=ctk.CTkFont(size=24, weight="bold"))
         title.pack(pady=(0,10))
+        
         subtitle = ctk.CTkLabel(center_frame, text="O seu e-mail não está registrado. Por favor, preencha seus dados para solicitar o acesso.", wraplength=400)
         subtitle.pack(pady=(0, 20))
+        
         ctk.CTkLabel(center_frame, text="Nome Completo:").pack(anchor="w", padx=20)
         self.name_entry = ctk.CTkEntry(center_frame, placeholder_text="Digite seu nome completo", width=300)
         self.name_entry.pack(pady=(0,10), padx=20, fill="x")
+        
         ctk.CTkLabel(center_frame, text="Nome de Usuário:").pack(anchor="w", padx=20)
         self.username_entry = ctk.CTkEntry(center_frame, placeholder_text="Ex: jsilva", width=300)
         self.username_entry.pack(pady=(0,10), padx=20, fill="x")
+        
         ctk.CTkLabel(center_frame, text="Selecione seu vínculo:").pack(anchor="w", padx=20)
-        self.role_combobox = ctk.CTkComboBox(center_frame, values=["Parceiro 67 Telecom", "Prefeitura de Ponta Porã"], width=300)
-        self.role_combobox.pack(pady=(0,20), padx=20, fill="x")
-        self.role_combobox.set("Parceiro 67 Telecom")
-        submit_button = ctk.CTkButton(center_frame, text="Enviar Solicitação", command=self.submit, height=40)
-        submit_button.pack(pady=10, padx=20, fill="x")
-        logout_button = ctk.CTkButton(center_frame, text="Sair", command=self.controller.perform_logout, fg_color="gray50")
-        logout_button.pack(pady=10, padx=20, fill="x")
-    
+        # ALTERAÇÃO AQUI: Adicionada a nova opção "Colaboradores 67".
+        self.role_combobox = ctk.CTkComboBox(center_frame, values=["Prefeitura", "Parceiro", "Colaboradores 67"], width=300, command=self._on_role_selected)
+        self.role_combobox.pack(pady=(0,10), padx=20, fill="x")
+        self.role_combobox.set("Prefeitura")
+
+        self.company_name_label = ctk.CTkLabel(center_frame, text="Selecione a Empresa Parceira:")
+        self.company_list = ["M2 TELECOMUNICAÇÕES", "MDA FIBRA", "DISK SISTEMA TELECOM", "GMN TELECOM", "67 INTERNET"]
+        self.company_name_combobox = ctk.CTkComboBox(center_frame, values=self.company_list, width=300)
+        
+        self.submit_button = ctk.CTkButton(center_frame, text="Enviar Solicitação", command=self.submit, height=40)
+        self.submit_button.pack(pady=20, padx=20, fill="x")
+        
+        self.logout_button = ctk.CTkButton(center_frame, text="Sair", command=self.controller.perform_logout, fg_color="gray50")
+        self.logout_button.pack(pady=10, padx=20, fill="x")
+
+        self._on_role_selected(self.role_combobox.get())
+
+    def _on_role_selected(self, selected_role):
+        if selected_role == "Parceiro":
+            self.company_name_label.pack(anchor="w", padx=20, before=self.submit_button)
+            self.company_name_combobox.pack(pady=(0,10), padx=20, fill="x", before=self.submit_button)
+        else:
+            self.company_name_label.pack_forget()
+            self.company_name_combobox.pack_forget()
+
     def on_show(self):
         self.name_entry.delete(0, "end")
         self.username_entry.delete(0, "end")
-        self.role_combobox.set("Parceiro 67 Telecom")
+        self.role_combobox.set("Prefeitura")
+        self.company_name_combobox.set("")
+        self._on_role_selected("Prefeitura")
 
     def submit(self):
-        # ALTERAÇÃO AQUI: Convertendo o nome para maiúsculas
         full_name = self.name_entry.get().upper()
-        username = self.username_entry.get() # Mantido como está (pode ser case-sensitive)
+        username = self.username_entry.get()
         role = self.role_combobox.get()
-        self.controller.submit_access_request(full_name, username, role)
         
+        company_name = None
+        if role == "Parceiro":
+            company_name = self.company_name_combobox.get()
+            if not company_name or company_name not in self.company_list:
+                messagebox.showwarning("Campo Obrigatório", "A seleção da empresa parceira é obrigatória.")
+                return
+
+        self.controller.submit_access_request(full_name, username, role, company_name)
+
 class PendingApprovalView(ctk.CTkFrame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
+        
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
         center_frame = ctk.CTkFrame(self, fg_color="transparent")
-        center_frame.pack(expand=True)
+        center_frame.grid(row=0, column=0)
+
         title = ctk.CTkLabel(center_frame, text="Acesso Pendente", font=ctk.CTkFont(size=24, weight="bold"))
         title.pack(pady=(0,10))
         subtitle = ctk.CTkLabel(center_frame, text="Sua solicitação de acesso está aguardando aprovação.", wraplength=450)

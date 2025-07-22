@@ -5,17 +5,19 @@ import csv
 
 # --- BANCO DE DADOS SIMULADO ---
 
-# ALTERAÇÃO AQUI: Adicionado o campo 'company' para os parceiros
 _users_db = [
     {"email": "giovane67telecom@gmail.com", "name": "GIOVANI FERREIRA", "username": "gferreira", "role": "admin", "status": "approved"},
-    {"email": "parceiro@exemplo.com", "name": "PARCEIRO EXEMPLO", "username": "parceiro", "role": "partner", "company": "EMPRESA PARCEIRA A", "status": "approved"},
+    {"email": "parceiro@exemplo.com", "name": "PARCEIRO EXEMPLO", "username": "parceiro", "role": "partner", "company": "M2 TELECOMUNICAÇÕES", "status": "approved"},
     {"email": "joao.silva@prefeitura.example.com", "name": "JOÃO DA SILVA", "username": "jsilva", "role": "prefeitura", "status": "approved"},
     {"email": "maria.santos@prefeitura.example.com", "name": "MARIA SANTOS", "username": "msantos", "role": "prefeitura", "status": "pending"},
-    {"email": "pedro.costa@gmail.com", "name": "PEDRO COSTA", "username": "pcosta", "role": "partner", "company": "EMPRESA PARCEIRA B", "status": "pending"},
+    {"email": "pedro.costa@gmail.com", "name": "PEDRO COSTA", "username": "pcosta", "role": "partner", "company": "MDA FIBRA", "status": "pending"},
+    {"email": "parceiro67@exemplo.com", "name": "PARCEIRO 67 INTERNET", "username": "parceiro67", "role": "partner", "company": "67 INTERNET", "status": "approved"},
+    # ALTERAÇÃO AQUI: Adicionado um novo utilizador comum da 67 Telecom.
+    {"email": "user67@exemplo.com", "name": "USUÁRIO 67 TELECOM", "username": "user67", "role": "telecom_user", "status": "approved"},
 ]
 
 _call_occurrences_db = [
-    {'ID': 'CALL-001', 'Data de Registro': '2025-06-30 15:00:12', 'Título da Ocorrência': 'CHIADO EM LIGAÇÕES PARA VIVO (EXEMPLO)', 'Email do Registrador': 'parceiro@exemplo.com', 'Status': 'RESOLVIDO', 'Operadora A': 'VIVO FIXO', 'Operadora B': 'CLARO FIXO', 'Testes': '[]'}, 
+    {'ID': 'CALL-001', 'Data de Registro': '2025-06-30 15:00:12', 'Título da Ocorrência': 'CHIADO EM LIGAÇÕES PARA VIVO (EXEMPLO)', 'Email do Registrador': 'parceiro@exemplo.com', 'Status': 'RESOLVIDO', 'Operadora A': 'VIVO FIXO', 'Operadora B': 'CLARO FIXO', 'Testes': '[{"horario": "15:00", "num_a": "67999991111", "op_a": "VIVO", "num_b": "6734212222", "op_b": "OI", "status": "CHIADO", "obs": "TESTE 1"}]'}, 
     {'ID': 'CALL-002', 'Data de Registro': '2025-07-01 09:05:45', 'Título da Ocorrência': 'CHAMADAS MUDAS PARA TIM (EXEMPLO)', 'Email do Registrador': 'parceiro@exemplo.com', 'Status': 'EM ANÁLISE', 'Operadora A': 'OUTRA', 'Operadora B': 'TIM', 'Testes': '[]'},
     {'ID': 'CALL-003', 'Data de Registro': '2025-07-02 10:00:00', 'Título da Ocorrência': 'CHAMADA DE (67) 99999-1111 PARA (67) 3421-2222', 'Email do Registrador': 'joao.silva@prefeitura.example.com', 'Status': 'REGISTRADO', 'Operadora A': 'VIVO FIXO', 'Operadora B': 'OI FIXO', 'Testes': '[]'}
 ]
@@ -24,8 +26,50 @@ _equipment_occurrences_db = [{'ID': 'EQUIP-001', 'Data de Registro': '2025-07-01
 
 # --- FUNÇÕES DE SERVIÇO ---
 
+def register_equipment_occurrence(user_email, data):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    new_id = f"EQUIP-{len(_equipment_occurrences_db) + 1:03d}"
+    
+    new_occurrence = {
+        'ID': new_id,
+        'Data de Registro': now,
+        'Email do Registrador': user_email,
+        'Status': 'REGISTRADO',
+        'Tipo de Equipamento': data.get('tipo'),
+        'Marca/Modelo': data.get('modelo'),
+        'Identificação (Nº Série)': data.get('serial'),
+        'Localização': data.get('localizacao'),
+        'Descrição do Problema': data.get('descricao')
+    }
+    _equipment_occurrences_db.append(new_occurrence)
+    return True
+
+def register_simple_call_occurrence(user_email, data):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    new_id = f"CALL-{len(_call_occurrences_db) + 1:03d}"
+
+    title = f"CHAMADA DE {data.get('origem')} PARA {data.get('destino')}"
+
+    new_occurrence = {
+        'ID': new_id,
+        'Data de Registro': now,
+        'Título da Ocorrência': title,
+        'Email do Registrador': user_email,
+        'Status': 'REGISTRADO',
+        'Descrição do Problema': data.get('descricao'),
+        'Testes': '[]'
+    }
+    _call_occurrences_db.append(new_occurrence)
+    return True
+
+def get_occurrence_by_id(occurrence_id):
+    all_occurrences = _call_occurrences_db + _equipment_occurrences_db
+    for occ in all_occurrences:
+        if occ.get('ID') == occurrence_id:
+            return occ
+    return None
+
 def write_to_csv(data_list, file_path):
-    """Escreve uma lista de dicionários em um ficheiro CSV."""
     if not data_list:
         return False, "A lista de dados está vazia."
     headers = [
@@ -39,13 +83,10 @@ def write_to_csv(data_list, file_path):
             writer.writeheader()
             writer.writerows(data_list)
         return True, f"Relatório salvo com sucesso em:\n{file_path}"
-    except IOError as e:
-        return False, f"Erro de E/S ao salvar o ficheiro: {e}"
-    except Exception as e:
-        return False, f"Ocorreu um erro inesperado: {e}"
+    except (IOError, Exception) as e:
+        return False, f"Ocorreu um erro ao salvar o ficheiro: {e}"
 
 def get_all_operators():
-    """Busca todas as operadoras únicas já registradas e as retorna em ordem alfabética."""
     operators = set()
     for occ in _call_occurrences_db:
         if occ.get('Operadora A'): operators.add(occ['Operadora A'])
@@ -54,9 +95,7 @@ def get_all_operators():
     operators.update(default_operators)
     return sorted(list(operators))
 
-# ALTERAÇÃO AQUI: Nova função para obter a lista de empresas parceiras
 def get_all_partner_companies():
-    """Retorna uma lista de nomes de empresas parceiras únicos."""
     companies = set(user['company'] for user in _users_db if user.get('role') == 'partner' and user.get('company'))
     return sorted(list(companies))
 
@@ -65,9 +104,9 @@ def check_user_status(email):
         if user["email"] == email: return user
     return {"status": "unregistered", "role": None}
 
-# ALTERAÇÃO AQUI: A função agora aceita 'company_name'
 def request_access(email, full_name, username, role_name, company_name=None):
-    role_map = {"Parceiro": "partner", "Prefeitura": "prefeitura"}
+    # ALTERAÇÃO AQUI: Adicionado o novo perfil "Colaboradores 67" ao mapeamento.
+    role_map = {"Parceiro": "partner", "Prefeitura": "prefeitura", "Colaboradores 67": "telecom_user"}
     role = role_map.get(role_name, "unknown")
     for user in _users_db:
         if user["email"] == email: return
@@ -79,7 +118,6 @@ def request_access(email, full_name, username, role_name, company_name=None):
     _users_db.append(new_user)
 
 def register_full_occurrence(user_email, title, testes):
-    """Registra uma ocorrência detalhada com múltiplos testes."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     new_id = f"CALL-{len(_call_occurrences_db) + 1:03d}"
     op_a = testes[0]['op_a'] if testes else 'N/A'
@@ -125,7 +163,21 @@ def update_occurrence_status(occurrence_id, new_status):
     return False
 
 def get_occurrences_by_user(credentials, user_email, search_term=None):
-    user_occurrences = [occ for occ in _call_occurrences_db + _equipment_occurrences_db if occ.get("Email do Registrador") == user_email]
+    # ALTERAÇÃO AQUI: Lógica modificada para o histórico partilhado dos utilizadores da 67 Telecom.
+    user_profile = check_user_status(user_email)
+    user_role = user_profile.get("role")
+    
+    user_occurrences = []
+    all_occurrences = _call_occurrences_db + _equipment_occurrences_db
+
+    if user_role == 'telecom_user':
+        # Se for um utilizador da 67 Telecom, obtém os e-mails de todos os outros utilizadores da 67 Telecom.
+        telecom_user_emails = {u['email'] for u in _users_db if u.get('role') == 'telecom_user'}
+        user_occurrences = [occ for occ in all_occurrences if occ.get("Email do Registrador") in telecom_user_emails]
+    else:
+        # Para outros perfis, mostra apenas as suas próprias ocorrências.
+        user_occurrences = [occ for occ in all_occurrences if occ.get("Email do Registrador") == user_email]
+
     if search_term:
         term = search_term.lower()
         filtered_list = []
@@ -143,18 +195,16 @@ def get_all_occurrences_for_admin(status_filter=None, role_filter=None, search_t
     if status_filter and status_filter != "Todos":
         all_occurrences = [occ for occ in all_occurrences if occ.get('Status') == status_filter]
     
-    # ALTERAÇÃO AQUI: Lógica de filtro atualizada para lidar com empresas
     if role_filter and role_filter != "Todos":
         email_to_user_details = {user['email']: user for user in _users_db}
         
-        if role_filter == "partner" or role_filter == "prefeitura":
-            # Filtra por tipo de perfil (todos os parceiros ou toda a prefeitura)
+        valid_roles = ["partner", "prefeitura", "telecom_user"]
+        if role_filter in valid_roles:
             all_occurrences = [
                 occ for occ in all_occurrences 
                 if email_to_user_details.get(occ.get('Email do Registrador'), {}).get('role') == role_filter
             ]
         else:
-            # Filtra por nome de empresa parceira específica
             all_occurrences = [
                 occ for occ in all_occurrences 
                 if email_to_user_details.get(occ.get('Email do Registrador'), {}).get('company') == role_filter

@@ -2,15 +2,12 @@ import customtkinter as ctk
 from functools import partial
 from tkinter import messagebox
 import threading
-# ALTERAÇÃO AQUI: As importações do Matplotlib foram removidas do topo do ficheiro
-# para serem carregadas apenas quando necessário.
 
 class AdminDashboardView(ctk.CTkFrame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
         
-        # --- Configuração da Responsividade da Grelha Principal ---
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
@@ -63,7 +60,7 @@ class AdminDashboardView(ctk.CTkFrame):
         role_filter_group = ctk.CTkFrame(filter_frame, fg_color="transparent")
         role_filter_group.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
         ctk.CTkLabel(role_filter_group, text="Filtrar por Grupo:").pack(side="top", anchor="w")
-        self.role_filter_menu = ctk.CTkOptionMenu(role_filter_group, values=["Todos", "partner", "prefeitura"], command=self.apply_filters)
+        self.role_filter_menu = ctk.CTkOptionMenu(role_filter_group, values=["Todos"], command=self.apply_filters)
         self.role_filter_menu.pack(side="top", fill="x", expand=True)
 
         export_group = ctk.CTkFrame(filter_frame, fg_color="transparent")
@@ -75,23 +72,19 @@ class AdminDashboardView(ctk.CTkFrame):
         self.stats_label = ctk.CTkLabel(left_column, text="Estatísticas: Carregando...", justify="left", font=ctk.CTkFont(size=14, weight="bold"))
         self.stats_label.pack(anchor="w", padx=10, pady=20)
 
-        # --- Coluna da Direita com Gráficos (Agora com Scroll) ---
         right_column = ctk.CTkFrame(main_analysis_frame)
         right_column.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
         
-        # ALTERAÇÃO AQUI: Adicionado um frame rolável para conter os gráficos
         scrollable_graphs_frame = ctk.CTkScrollableFrame(right_column, fg_color="transparent")
         scrollable_graphs_frame.pack(fill="both", expand=True)
 
-        # Frame para o primeiro gráfico
         self.status_chart_frame = ctk.CTkFrame(scrollable_graphs_frame)
         self.status_chart_frame.pack(fill="x", expand=True, padx=5, pady=(0, 5))
-        self.status_chart_frame.configure(height=300) # Altura mínima
+        self.status_chart_frame.configure(height=300)
         
-        # Frame para o segundo gráfico
         self.operator_chart_frame = ctk.CTkFrame(scrollable_graphs_frame)
         self.operator_chart_frame.pack(fill="x", expand=True, padx=5, pady=5)
-        self.operator_chart_frame.configure(height=300) # Altura mínima
+        self.operator_chart_frame.configure(height=300)
 
     def export_to_csv(self):
         if not self.current_analysis_list:
@@ -99,10 +92,27 @@ class AdminDashboardView(ctk.CTkFrame):
             return
         self.controller.export_analysis_to_csv(self.current_analysis_list)
 
+    def _update_group_filter(self):
+        companies = self.controller.get_partner_companies()
+        # ALTERAÇÃO AQUI: Adicionada a nova opção de filtro para "Usuários 67 Telecom".
+        options = ["Todos", "Prefeitura", "Parceiros (Geral)", "Usuários 67 Telecom"] + companies
+        self.role_filter_menu.configure(values=options)
+        self.role_filter_menu.set("Todos")
+
     def apply_filters(self, _=None):
         status = self.status_filter_menu.get()
-        role = self.role_filter_menu.get()
-        
+        role_selection = self.role_filter_menu.get()
+
+        # ALTERAÇÃO AQUI: Mapeamento atualizado para incluir o novo perfil.
+        if role_selection == "Parceiros (Geral)":
+            role_filter = "partner"
+        elif role_selection == "Prefeitura":
+            role_filter = "prefeitura"
+        elif role_selection == "Usuários 67 Telecom":
+            role_filter = "telecom_user"
+        else:
+            role_filter = role_selection
+
         self.stats_label.configure(text="Estatísticas: Calculando...")
         if self.status_chart_canvas: self.status_chart_canvas.get_tk_widget().destroy()
         if self.operator_chart_canvas: self.operator_chart_canvas.get_tk_widget().destroy()
@@ -111,7 +121,7 @@ class AdminDashboardView(ctk.CTkFrame):
         ctk.CTkLabel(self.status_chart_frame, text="Carregando...").pack(expand=True)
         ctk.CTkLabel(self.operator_chart_frame, text="Carregando...").pack(expand=True)
 
-        threading.Thread(target=self._apply_filters_thread, args=(status, role), daemon=True).start()
+        threading.Thread(target=self._apply_filters_thread, args=(status, role_filter), daemon=True).start()
 
     def _apply_filters_thread(self, status, role):
         filtered_list = self.controller.get_all_occurrences(status_filter=status, role_filter=role)
@@ -227,6 +237,7 @@ class AdminDashboardView(ctk.CTkFrame):
         elif selected_tab == "Gerenciar Usuários":
             self.load_all_users()
         elif selected_tab == "Análise de Dados":
+            self._update_group_filter()
             self.apply_filters()
 
     def load_access_requests(self):
@@ -246,7 +257,8 @@ class AdminDashboardView(ctk.CTkFrame):
         for user in pending_list:
             card = ctk.CTkFrame(self.pending_users_frame)
             card.pack(fill="x", pady=5)
-            info_text = f"Nome: {user.get('name', 'N/A')} ({user.get('username', 'N/A')})\nE-mail: {user['email']}\nVínculo: {user.get('company', user.get('role'))}"
+            company_info = f" ({user.get('company')})" if user.get('role') == 'partner' and user.get('company') else ""
+            info_text = f"Nome: {user.get('name', 'N/A')} (@{user.get('username', 'N/A')})\nE-mail: {user['email']}\nVínculo: {user['role']}{company_info}"
             ctk.CTkLabel(card, text=info_text, justify="left").pack(side="left", padx=10, pady=5)
             reject_button = ctk.CTkButton(card, text="Rejeitar", command=partial(self.controller.update_user_access, user['email'], 'rejected'), fg_color="red")
             reject_button.pack(side="right", padx=5, pady=5)
@@ -269,7 +281,8 @@ class AdminDashboardView(ctk.CTkFrame):
             self.all_users_frame.configure(label_text="Nenhum usuário encontrado.")
             return
         self.all_users_frame.configure(label_text="")
-        role_options = ["admin", "partner", "prefeitura"]
+        # ALTERAÇÃO AQUI: Adicionado "telecom_user" às opções de perfil que um admin pode atribuir.
+        role_options = ["admin", "partner", "prefeitura", "telecom_user"]
         for user in all_users_list:
             email = user.get('email')
             self.original_roles[email] = user.get('role')

@@ -1,20 +1,22 @@
 import customtkinter as ctk
 from tkinter import messagebox
 
-
 class EquipmentView(ctk.CTkFrame):
-    """Tela para o registo de problemas de equipamento (Prefeitura)."""
-
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
 
+        # --- Configuração da Responsividade ---
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1) # Linha do formulário expande
+
         ctk.CTkLabel(self, text="Registar Suporte Técnico de Equipamento",
-                     font=ctk.CTkFont(size=24, weight="bold")).pack(pady=(10, 20))
+                     font=ctk.CTkFont(size=24, weight="bold")).grid(row=0, column=0, padx=20, pady=(10, 20), sticky="ew")
 
         form_frame = ctk.CTkFrame(self)
-        form_frame.pack(fill="x", padx=20, pady=10)
+        form_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
         form_frame.grid_columnconfigure(1, weight=1)
+        form_frame.grid_rowconfigure(4, weight=1) # Linha da descrição expande
 
         ctk.CTkLabel(form_frame, text="Tipo de Equipamento:").grid(
             row=0, column=0, padx=10, pady=10, sticky="w")
@@ -45,10 +47,10 @@ class EquipmentView(ctk.CTkFrame):
             row=4, column=0, padx=10, pady=10, sticky="nw")
         self.equip_description = ctk.CTkTextbox(form_frame, height=120)
         self.equip_description.grid(
-            row=4, column=1, padx=10, pady=10, sticky="ew")
+            row=4, column=1, padx=10, pady=10, sticky="nsew")
 
         button_frame = ctk.CTkFrame(self, fg_color="transparent")
-        button_frame.pack(fill="x", padx=20, pady=(10, 0))
+        button_frame.grid(row=2, column=0, padx=20, pady=(10, 10), sticky="ew")
         button_frame.grid_columnconfigure((0, 1), weight=1)
 
         self.back_button = ctk.CTkButton(button_frame, text="Voltar ao Menu", command=lambda: self.controller.show_frame(
@@ -60,7 +62,6 @@ class EquipmentView(ctk.CTkFrame):
         self.submit_button.grid(row=0, column=1, padx=(5, 0), sticky="ew")
 
     def on_show(self):
-        """Limpa o formulário sempre que a tela é exibida."""
         self.equip_type.set("")
         self.equip_model.delete(0, "end")
         self.equip_serial.delete(0, "end")
@@ -69,8 +70,6 @@ class EquipmentView(ctk.CTkFrame):
         self.set_submitting_state(False)
 
     def submit(self):
-        """Chama o controlador para submeter a ocorrência."""
-        # ALTERAÇÃO AQUI: Convertendo todos os campos para maiúsculas
         data = {
             "tipo": self.equip_type.get().upper(),
             "modelo": self.equip_model.get().upper(),
@@ -81,7 +80,6 @@ class EquipmentView(ctk.CTkFrame):
         self.controller.submit_equipment_occurrence(data)
 
     def set_submitting_state(self, is_submitting):
-        """Ativa/desativa os botões durante o envio."""
         if is_submitting:
             self.submit_button.configure(state="disabled", text="A enviar...")
         else:
