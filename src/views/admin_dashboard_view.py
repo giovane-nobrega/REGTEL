@@ -93,9 +93,8 @@ class AdminDashboardView(ctk.CTkFrame):
         self.controller.export_analysis_to_csv(self.current_analysis_list)
 
     def _update_group_filter(self):
-        """Busca a lista de empresas e atualiza o menu de filtro."""
         companies = self.controller.get_partner_companies()
-        options = ["Todos", "Prefeitura", "Parceiros (Geral)"] + companies
+        options = ["Todos", "Prefeitura", "Parceiros (Geral)", "Colaboradores 67"] + companies
         self.role_filter_menu.configure(values=options)
         self.role_filter_menu.set("Todos")
 
@@ -107,12 +106,14 @@ class AdminDashboardView(ctk.CTkFrame):
             role_filter = "partner"
         elif role_selection == "Prefeitura":
             role_filter = "prefeitura"
+        elif role_selection == "Colaboradores 67":
+            role_filter = "telecom_user"
         else:
             role_filter = role_selection
 
         self.stats_label.configure(text="Estatísticas: Calculando...")
-        if self.status_chart_canvas: self.status_chart_canvas.get_tk_widget().destroy()
-        if self.operator_chart_canvas: self.operator_chart_canvas.get_tk_widget().destroy()
+        if hasattr(self, 'status_chart_canvas') and self.status_chart_canvas: self.status_chart_canvas.get_tk_widget().destroy()
+        if hasattr(self, 'operator_chart_canvas') and self.operator_chart_canvas: self.operator_chart_canvas.get_tk_widget().destroy()
         for widget in self.status_chart_frame.winfo_children(): widget.destroy()
         for widget in self.operator_chart_frame.winfo_children(): widget.destroy()
         ctk.CTkLabel(self.status_chart_frame, text="Carregando...").pack(expand=True)
@@ -278,7 +279,7 @@ class AdminDashboardView(ctk.CTkFrame):
             self.all_users_frame.configure(label_text="Nenhum usuário encontrado.")
             return
         self.all_users_frame.configure(label_text="")
-        role_options = ["admin", "partner", "prefeitura"]
+        role_options = ["admin", "partner", "prefeitura", "telecom_user"]
         for user in all_users_list:
             email = user.get('email')
             self.original_roles[email] = user.get('role')
@@ -331,15 +332,34 @@ class AdminDashboardView(ctk.CTkFrame):
             self.original_statuses[item_id] = item.get('Status', 'N/A')
             card = ctk.CTkFrame(self.all_occurrences_frame)
             card.pack(fill="x", padx=5, pady=5)
-            card.grid_columnconfigure(0, weight=1); card.grid_columnconfigure(1, weight=0)
+            card.grid_columnconfigure(0, weight=1)
+            card.grid_columnconfigure(1, weight=0)
+            
+            info_frame = ctk.CTkFrame(card, fg_color="transparent")
+            info_frame.grid(row=0, column=0, sticky="w", padx=10, pady=5)
+
             title = item.get('Título da Ocorrência', item.get('Tipo de Equipamento', 'N/A'))
-            date = item.get('Data de Registro', 'N/A'); email = item.get('Email do Registrador', 'N/A')
-            ctk.CTkLabel(card, text=f"ID: {item_id} - {title}", font=ctk.CTkFont(size=14, weight="bold"), anchor="w").grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(5, 0))
-            ctk.CTkLabel(card, text=f"Registrado por: {email} em {date}", anchor="w", text_color="gray60").grid(row=1, column=0, sticky="w", padx=10, pady=(0,5))
-            status_combo = ctk.CTkComboBox(card, values=status_options, width=180)
+            date = item.get('Data de Registro', 'N/A')
+            
+            registrador_nome = item.get('Nome do Registrador', 'N/A')
+            registrador_user = item.get('Username do Registrador', 'N/A')
+            details_text = f"Registrado por: {registrador_nome} (@{registrador_user}) em {date}"
+
+            ctk.CTkLabel(info_frame, text=f"ID: {item_id} - {title}", font=ctk.CTkFont(size=14, weight="bold"), anchor="w").pack(anchor="w")
+            ctk.CTkLabel(info_frame, text=details_text, anchor="w", text_color="gray60").pack(anchor="w")
+            
+            # Frame para os controlos (status e botão)
+            controls_frame = ctk.CTkFrame(card, fg_color="transparent")
+            controls_frame.grid(row=0, column=1, sticky="e", padx=10, pady=5)
+
+            status_combo = ctk.CTkComboBox(controls_frame, values=status_options, width=180)
             status_combo.set(self.original_statuses[item_id])
-            status_combo.grid(row=1, column=1, sticky="e", padx=10, pady=(0,5))
+            status_combo.pack(side="left", padx=(0, 10))
             self.status_updaters[item_id] = status_combo
+
+            # ALTERAÇÃO AQUI: Adicionado o botão "Abrir"
+            open_button = ctk.CTkButton(controls_frame, text="Abrir", width=80, command=partial(self.controller.show_occurrence_details, item_id))
+            open_button.pack(side="left")
 
     def save_status_changes(self):
         changes_to_save = {}

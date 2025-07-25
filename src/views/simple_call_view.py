@@ -1,6 +1,5 @@
 import customtkinter as ctk
-from tkinter import filedialog, messagebox
-import os
+from tkinter import messagebox
 
 class SimpleCallView(ctk.CTkFrame):
     """Tela para o registro simplificado de chamadas (Prefeitura)."""
@@ -8,7 +7,6 @@ class SimpleCallView(ctk.CTkFrame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
-        self.attachment_paths = []
 
         # --- Configuração da Responsividade ---
         self.grid_rowconfigure(1, weight=1)
@@ -43,20 +41,8 @@ class SimpleCallView(ctk.CTkFrame):
         self.description_textbox.grid(
             row=2, column=1, padx=10, pady=10, sticky="nsew")
 
-        # Frame de anexos
-        attachment_frame = ctk.CTkFrame(self)
-        attachment_frame.grid(row=2, column=0, padx=20, pady=5, sticky="ew")
-        ctk.CTkLabel(attachment_frame, text="Anexar Imagens (Opcional):", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(10,5), pady=10)
-        
-        attach_button = ctk.CTkButton(attachment_frame, text="Selecionar...", command=self._select_files)
-        attach_button.pack(side="left", padx=5, pady=10)
-
-        self.attachment_label = ctk.CTkLabel(attachment_frame, text="Nenhum ficheiro.", text_color="gray60")
-        self.attachment_label.pack(side="left", padx=5, pady=10)
-
-
         button_frame = ctk.CTkFrame(self, fg_color="transparent")
-        button_frame.grid(row=3, column=0, padx=20, pady=(10, 10), sticky="ew")
+        button_frame.grid(row=2, column=0, padx=20, pady=(10, 10), sticky="ew")
         button_frame.grid_columnconfigure((0, 1), weight=1)
 
         self.back_button = ctk.CTkButton(button_frame, text="Voltar ao Menu", command=lambda: self.controller.show_frame(
@@ -67,25 +53,11 @@ class SimpleCallView(ctk.CTkFrame):
             button_frame, text="Registrar Ocorrência", command=self.submit, height=40)
         self.submit_button.grid(row=0, column=1, padx=(5, 0), sticky="ew")
 
-    def _select_files(self):
-        filepaths = filedialog.askopenfilenames(
-            title="Selecione as imagens",
-            filetypes=[("Imagens", "*.png *.jpg *.jpeg")]
-        )
-        if filepaths:
-            self.attachment_paths = list(filepaths)
-            self.attachment_label.configure(text=f"{len(filepaths)} ficheiro(s) selecionado(s).")
-        else:
-            self.attachment_paths = []
-            self.attachment_label.configure(text="Nenhum ficheiro.")
-
     def on_show(self):
         """Limpa o formulário sempre que a tela é exibida."""
         self.entry_num_origem.delete(0, "end")
         self.entry_num_destino.delete(0, "end")
         self.description_textbox.delete("1.0", "end")
-        self.attachment_paths = []
-        self.attachment_label.configure(text="Nenhum ficheiro.")
         self.set_submitting_state(False)
 
     def submit(self):
@@ -95,7 +67,8 @@ class SimpleCallView(ctk.CTkFrame):
             "destino": self.entry_num_destino.get().upper(),
             "descricao": self.description_textbox.get("1.0", "end-1c").upper()
         }
-        self.controller.submit_simple_call_occurrence(form_data, self.attachment_paths)
+        # A passagem de anexos foi removida daqui
+        self.controller.submit_simple_call_occurrence(form_data)
 
     def set_submitting_state(self, is_submitting):
         """Ativa/desativa os botões durante o envio."""

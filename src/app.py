@@ -18,6 +18,7 @@ from views.occurrence_detail_view import OccurrenceDetailView
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
+        
         self.title("Plataforma de Registro de Ocorrências (Craft Quest)")
         self.geometry("900x750")
         self.minsize(800, 650)
@@ -36,8 +37,10 @@ class App(ctk.CTk):
         container.pack(fill="both", expand=True)
 
         self.frames = {}
-        for F in (LoginView, RequestAccessView, PendingApprovalView, MainMenuView,
-                  AdminDashboardView, RegistrationView, SimpleCallView, EquipmentView, HistoryView):
+        view_classes = (LoginView, RequestAccessView, PendingApprovalView, MainMenuView,
+                        AdminDashboardView, RegistrationView, SimpleCallView, EquipmentView, HistoryView)
+        
+        for F in view_classes:
             page_name = F.__name__
             frame = F(parent=container, controller=self)
             self.frames[page_name] = frame
@@ -63,19 +66,25 @@ class App(ctk.CTk):
             messagebox.showerror("Erro", "Não foi possível encontrar os detalhes para a ocorrência selecionada.")
 
     def check_initial_login(self):
-        threading.Thread(target=self.load_operators, daemon=True).start()
-        
-        self.credentials = auth_service.load_credentials()
-        if self.credentials:
-            self.frames["LoginView"].set_loading_state("Verificando credenciais...")
-            threading.Thread(target=self._fetch_user_profile, daemon=True).start()
-        else:
-            self.show_frame("LoginView")
+        self.frames["LoginView"].set_loading_state("Verificando credenciais...")
+        threading.Thread(target=self._check_initial_login_thread, daemon=True).start()
 
-    def load_operators(self):
+    def _check_initial_login_thread(self):
+        creds = auth_service.load_credentials()
+        if creds:
+            self.credentials = creds
+            self.after(0, self._fetch_user_profile)
+        else:
+            self.after(0, self.frames["LoginView"].set_default_state)
+            self.after(0, self.show_frame, "LoginView")
+
+    def load_secondary_data(self):
+        threading.Thread(target=self._load_operators_thread, daemon=True).start()
+
+    def _load_operators_thread(self):
         self.operator_list = sheets_service.get_all_operators()
         if "RegistrationView" in self.frames:
-            self.frames["RegistrationView"].set_operator_suggestions(self.operator_list)
+            self.after(0, self.frames["RegistrationView"].set_operator_suggestions, self.operator_list)
 
     def export_analysis_to_csv(self, data_list):
         try:
@@ -128,6 +137,7 @@ class App(ctk.CTk):
     def navigate_based_on_status(self):
         status = self.user_profile.get("status")
         if status == "approved":
+            self.load_secondary_data()
             main_menu = self.frames["MainMenuView"]
             main_menu.update_user_info(self.user_email, self.user_profile.get("username", ""))
             main_menu.update_buttons(self.user_profile.get("role"))
@@ -203,40 +213,56 @@ class App(ctk.CTk):
 
     def _submit_simple_call_thread(self, form_data):
         sheets_service.register_simple_call_occurrence(self.user_email, form_data)
-        self.after(0, self._on_submission_success, "SimpleCallView")
+        self.after(0, self._on_submission_success, "SimpleCallView", "Ocorrência de chamada registrada com sucesso.")
 
-    def submit_equipment_occurrence(self, data):
+    def submit_equipment_occurrence(self, data, attachment_paths=None):
         view = self.frames["EquipmentView"]
         view.set_submitting_state(True)
         threading.Thread(
             target=self._submit_equipment_thread,
-            args=(data,),
+            args=(data, attachment_paths),
             daemon=True
         ).start()
 
-    def _submit_equipment_thread(self, data):
-        sheets_service.register_equipment_occurrence(self.user_email, data)
-        self.after(0, self._on_submission_success, "EquipmentView")
+    def _submit_equipment_thread(self, data, attachment_paths):
+        # ALTERAÇÃO AQUI: A thread agora recebe o resultado da função de serviço.
+        success, message = sheets_service.register_equipment_occurrence(self.credentials, self.user_email, data, attachment_paths)
+        self.after(0, self._on_submission_finished, "EquipmentView", success, message)
 
     def submit_full_occurrence(self, title):
+        role = self.get_current_user_role()
         if not title:
             messagebox.showwarning("Campo Obrigatório", "O título da ocorrência é obrigatório.")
             return
-        if len(self.testes_adicionados) < 3:
+        if role == 'partner' and len(self.testes_adicionados) < 3:
             messagebox.showwarning("Validação Falhou", "É necessário adicionar pelo menos 3 testes de ligação como evidência.")
             return
+        
         view = self.frames["RegistrationView"]
         view.set_submitting_state(True)
         threading.Thread(target=self._submit_full_occurrence_thread, args=(title, self.testes_adicionados), daemon=True).start()
 
     def _submit_full_occurrence_thread(self, title, testes):
         sheets_service.register_full_occurrence(self.user_email, title, testes)
-        self.after(0, self._on_submission_success, "RegistrationView")
+        self.after(0, self._on_submission_success, "RegistrationView", "Ocorrência detalhada registrada com sucesso.")
 
-    def _on_submission_success(self, view_name):
+    def _on_submission_success(self, view_name, success_message):
         """Callback genérico para quando uma submissão é bem-sucedida."""
-        messagebox.showinfo("Sucesso", "Ocorrência registrada com sucesso!")
+        messagebox.showinfo("Sucesso", success_message)
         view = self.frames[view_name]
         if hasattr(view, 'set_submitting_state'):
             view.set_submitting_state(False)
         self.show_frame("MainMenuView")
+
+    # ALTERAÇÃO AQUI: Novo callback para lidar com sucesso ou falha.
+    def _on_submission_finished(self, view_name, success, message):
+        """Callback que mostra uma mensagem de sucesso ou de erro."""
+        if success:
+            messagebox.showinfo("Sucesso", message)
+            self.show_frame("MainMenuView")
+        else:
+            messagebox.showerror("Falha no Registro", message)
+
+        view = self.frames[view_name]
+        if hasattr(view, 'set_submitting_state'):
+            view.set_submitting_state(False)

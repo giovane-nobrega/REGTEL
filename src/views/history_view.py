@@ -79,9 +79,9 @@ class HistoryView(ctk.CTkFrame):
             title_label = ctk.CTkLabel(info_frame, text=f"ID: {item_id} - {title}", font=ctk.CTkFont(size=14, weight="bold"), anchor="w")
             title_label.pack(anchor="w")
             
-            details_text = f"Registrado em: {date}"
-            if user_role == 'admin':
-                details_text += f" por: {item.get('Email do Registrador', 'N/A')}"
+            registrador_nome = item.get('Nome do Registrador', 'N/A')
+            registrador_user = item.get('Username do Registrador', 'N/A')
+            details_text = f"Registrado por: {registrador_nome} (@{registrador_user}) em {date}"
 
             details_label = ctk.CTkLabel(info_frame, text=details_text, anchor="w", text_color="gray60")
             details_label.pack(anchor="w")

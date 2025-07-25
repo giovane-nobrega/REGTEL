@@ -7,6 +7,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.exceptions import RefreshError
 from googleapiclient.discovery import build
 
+# ALTERAÇÃO AQUI: Adicionado o scope (permissão) para o Google Drive.
 SCOPES = ["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
 def resource_path(relative_path):
@@ -56,3 +57,12 @@ def get_user_email(credentials):
         return user_info.get("email", "Erro: e-mail não encontrado")
     except Exception:
         return "Erro ao obter e-mail"
+
+# ALTERAÇÃO AQUI: Adicionada a função em falta para construir o serviço do Google Drive.
+def get_drive_service(credentials):
+    """Constrói e retorna um serviço para interagir com a API do Google Drive."""
+    try:
+        return build('drive', 'v3', credentials=credentials)
+    except Exception as e:
+        print(f"Erro ao construir o serviço do Drive: {e}")
+        return None

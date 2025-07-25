@@ -10,7 +10,7 @@ class EquipmentView(ctk.CTkFrame):
 
         # --- Configuração da Responsividade ---
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1) # Linha do formulário expande
+        self.grid_rowconfigure(1, weight=1) 
 
         ctk.CTkLabel(self, text="Registar Suporte Técnico de Equipamento",
                      font=ctk.CTkFont(size=24, weight="bold")).grid(row=0, column=0, padx=20, pady=(10, 20), sticky="ew")
@@ -18,7 +18,7 @@ class EquipmentView(ctk.CTkFrame):
         form_frame = ctk.CTkFrame(self)
         form_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
         form_frame.grid_columnconfigure(1, weight=1)
-        form_frame.grid_rowconfigure(4, weight=1) # Linha da descrição expande
+        form_frame.grid_rowconfigure(4, weight=1) 
 
         ctk.CTkLabel(form_frame, text="Tipo de Equipamento:").grid(
             row=0, column=0, padx=10, pady=10, sticky="w")
@@ -51,6 +51,7 @@ class EquipmentView(ctk.CTkFrame):
         self.equip_description.grid(
             row=4, column=1, padx=10, pady=10, sticky="nsew")
 
+        # Frame de anexos
         attachment_frame = ctk.CTkFrame(self)
         attachment_frame.grid(row=2, column=0, padx=20, pady=5, sticky="ew")
         ctk.CTkLabel(attachment_frame, text="Anexar Imagens (Opcional):", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(10,5), pady=10)
