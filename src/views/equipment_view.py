@@ -32,11 +32,13 @@ class EquipmentView(ctk.CTkFrame):
             form_frame, placeholder_text="Ex: Grandstream GXP1610")
         self.equip_model.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
 
-        ctk.CTkLabel(form_frame, text="Identificação (Nº Série):").grid(
+        # --- ALTERAÇÃO AQUI ---
+        ctk.CTkLabel(form_frame, text="Ramal:").grid(
             row=2, column=0, padx=10, pady=10, sticky="w")
-        self.equip_serial = ctk.CTkEntry(
-            form_frame, placeholder_text="Ex: 987654321XYZ")
-        self.equip_serial.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
+        self.equip_ramal = ctk.CTkEntry(
+            form_frame, placeholder_text="Ex: 2001")
+        self.equip_ramal.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
+        # --- FIM DA ALTERAÇÃO ---
 
         ctk.CTkLabel(form_frame, text="Localização:").grid(
             row=3, column=0, padx=10, pady=10, sticky="w")
@@ -51,7 +53,6 @@ class EquipmentView(ctk.CTkFrame):
         self.equip_description.grid(
             row=4, column=1, padx=10, pady=10, sticky="nsew")
 
-        # Frame de anexos
         attachment_frame = ctk.CTkFrame(self)
         attachment_frame.grid(row=2, column=0, padx=20, pady=5, sticky="ew")
         ctk.CTkLabel(attachment_frame, text="Anexar Imagens (Opcional):", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(10,5), pady=10)
@@ -89,7 +90,9 @@ class EquipmentView(ctk.CTkFrame):
     def on_show(self):
         self.equip_type.set("")
         self.equip_model.delete(0, "end")
-        self.equip_serial.delete(0, "end")
+        # --- ALTERAÇÃO AQUI ---
+        self.equip_ramal.delete(0, "end")
+        # --- FIM DA ALTERAÇÃO ---
         self.equip_location.delete(0, "end")
         self.equip_description.delete("1.0", "end")
         self.attachment_paths = []
@@ -97,13 +100,15 @@ class EquipmentView(ctk.CTkFrame):
         self.set_submitting_state(False)
 
     def submit(self):
+        # --- ALTERAÇÃO AQUI ---
         data = {
             "tipo": self.equip_type.get().upper(),
             "modelo": self.equip_model.get().upper(),
-            "serial": self.equip_serial.get().upper(),
+            "ramal": self.equip_ramal.get().upper(),
             "localizacao": self.equip_location.get().upper(),
             "descricao": self.equip_description.get("1.0", "end-1c").upper()
         }
+        # --- FIM DA ALTERAÇÃO ---
         self.controller.submit_equipment_occurrence(data, self.attachment_paths)
 
     def set_submitting_state(self, is_submitting):
