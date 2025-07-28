@@ -4,46 +4,47 @@ import csv
 from datetime import datetime
 from googleapiclient.http import MediaFileUpload
 import os
+import traceback
 from services import auth_service
 
 # ==============================================================================
-# --- CONFIGURAÇÃO DO GOOGLE SHEETS ---
+# --- CONFIGURAÇÃO E AUTENTICAÇÃO INICIAL ---
 # ==============================================================================
-SPREADSHEET_ID = "1ymzB0QiZiuTnLk9h3qfFnZgcxkTKJUeT-3rn4bYqtQA/"
-
-# Nomes das abas (worksheets) na sua planilha.
+SPREADSHEET_ID = "1ymzB0QiZiuTnLk9h3qfFnZgcxkTKJUeT-3rn4bYqtQA"
 USERS_SHEET = "users"
 CALLS_SHEET = "call_occurrences"
 EQUIPMENT_SHEET = "equipment_occurrences"
 
-# (O resto das funções auxiliares permanece igual...)
-def _get_worksheet(credentials, sheet_name):
-    if SPREADSHEET_ID == "COLOQUE_O_ID_CORRETO_DA_SUA_PLANILHA_AQUI":
-        print("ERRO FATAL: O ID da planilha não foi definido no ficheiro sheets_service.py.")
+_SERVICE_CREDENTIALS = auth_service.get_service_account_credentials()
+_GC = gspread.service_account(filename=auth_service.SERVICE_ACCOUNT_FILE, scopes=auth_service.SCOPES_SERVICE_ACCOUNT) if _SERVICE_CREDENTIALS else None
+_SPREADSHEET = _GC.open_by_key(SPREADSHEET_ID) if _GC else None
+
+# ==============================================================================
+# --- FUNÇÕES AUXILIARES ---
+# ==============================================================================
+
+def _get_worksheet(sheet_name):
+    if not _SPREADSHEET:
+        print("ERRO: A conexão com a planilha não foi estabelecida.")
         return None
     try:
-        gc = gspread.authorize(credentials)
-        spreadsheet = gc.open_by_key(SPREADSHEET_ID)
-        return spreadsheet.worksheet(sheet_name)
-    except gspread.exceptions.SpreadsheetNotFound:
-        print(f"ERRO: A planilha com o ID '{SPREADSHEET_ID}' não foi encontrada.")
-        return None
+        return _SPREADSHEET.worksheet(sheet_name)
     except gspread.exceptions.WorksheetNotFound:
         print(f"ERRO: A aba '{sheet_name}' não foi encontrada na planilha.")
         return None
     except Exception as e:
-        print(f"ERRO ao conectar com o Google Sheets: {e}")
+        print(f"ERRO ao obter a aba '{sheet_name}': {e}")
         return None
 
-def _get_user_info(credentials, user_email):
-    user_profile = check_user_status(credentials, user_email)
+def _get_user_info(user_email):
+    user_profile = check_user_status(user_email)
     if user_profile:
         return user_profile.get("name", "N/A"), user_profile.get("username", "N/A")
     return "N/A", "N/A"
 
-def _upload_files_to_drive(credentials, file_paths):
+def _upload_files_to_drive(user_credentials, file_paths):
     if not file_paths: return True, []
-    drive_service = auth_service.get_drive_service(credentials)
+    drive_service = auth_service.get_drive_service(user_credentials)
     if not drive_service: return False, "Não foi possível obter o serviço do Google Drive."
     try:
         q = "mimeType='application/vnd.google-apps.folder' and name='Craft Quest Anexos' and trashed=false"
@@ -61,20 +62,19 @@ def _upload_files_to_drive(credentials, file_paths):
         return False, f"Ocorreu um erro durante o upload para o Google Drive: {e}"
 
 # ==============================================================================
-# --- FUNÇÕES DE SERVIÇO (AGORA COM GSPREAD) ---
+# --- FUNÇÕES DE SERVIÇO (USANDO A CONTA DE SERVIÇO) ---
 # ==============================================================================
 
-def check_user_status(credentials, email):
-    ws = _get_worksheet(credentials, USERS_SHEET)
+def check_user_status(email):
+    ws = _get_worksheet(USERS_SHEET)
     if not ws: return {"status": "error", "role": None}
-    users_data = ws.get_all_records()
-    for user in users_data:
+    for user in ws.get_all_records():
         if user.get("email") == email: return user
     return {"status": "unregistered", "role": None}
 
-def request_access(credentials, email, full_name, username, role, company_name=None):
-    ws = _get_worksheet(credentials, USERS_SHEET)
-    if not ws: return False, "Não foi possível aceder à planilha de usuários."
+def request_access(email, full_name, username, role, company_name=None):
+    ws = _get_worksheet(USERS_SHEET)
+    if not ws: return False, "Não foi possível aceder à planilha."
     try:
         if ws.find(email): return False, "Solicitação já existe para este e-mail."
     except gspread.exceptions.CellNotFound: pass
@@ -82,90 +82,80 @@ def request_access(credentials, email, full_name, username, role, company_name=N
     ws.append_row(new_row, value_input_option='USER_ENTERED')
     return True, "Solicitação de acesso enviada com sucesso."
 
-def get_pending_requests(credentials):
-    ws = _get_worksheet(credentials, USERS_SHEET)
-    if not ws: return []
-    return [user for user in ws.get_all_records() if user.get("status") == "pending"]
+def get_pending_requests():
+    ws = _get_worksheet(USERS_SHEET)
+    return [user for user in ws.get_all_records() if user.get("status") == "pending"] if ws else []
 
-def update_user_status(credentials, email, new_status):
-    ws = _get_worksheet(credentials, USERS_SHEET)
+def update_user_status(email, new_status):
+    ws = _get_worksheet(USERS_SHEET)
     if not ws: return
     try:
         cell = ws.find(email, in_column=1)
         if cell: ws.update_cell(cell.row, 5, new_status)
     except gspread.exceptions.CellNotFound: print(f"Usuário {email} não encontrado.")
 
-def get_all_users(credentials):
-    ws = _get_worksheet(credentials, USERS_SHEET)
+def get_all_users():
+    ws = _get_worksheet(USERS_SHEET)
     return ws.get_all_records() if ws else []
 
-def update_user_role(credentials, email, new_role):
-    ws = _get_worksheet(credentials, USERS_SHEET)
+def update_user_role(email, new_role):
+    ws = _get_worksheet(USERS_SHEET)
     if not ws: return
     try:
         cell = ws.find(email, in_column=1)
         if cell: ws.update_cell(cell.row, 4, new_role)
     except gspread.exceptions.CellNotFound: print(f"Usuário {email} não encontrado.")
 
-def register_simple_call_occurrence(credentials, user_email, data):
-    ws = _get_worksheet(credentials, CALLS_SHEET)
-    if not ws: return False, "Falha ao aceder à planilha de ocorrências."
+def register_simple_call_occurrence(user_email, data):
+    ws = _get_worksheet(CALLS_SHEET)
+    if not ws: return False, "Falha ao aceder à planilha."
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     new_id = f"CALL-{len(ws.get_all_records()) + 1:04d}"
-    user_name, user_username = _get_user_info(credentials, user_email)
+    user_name, user_username = _get_user_info(user_email)
     title = f"CHAMADA DE {data.get('origem')} PARA {data.get('destino')}"
     new_row = [new_id, now, title, user_email, user_name, user_username, 'REGISTRADO', "", "", "[]", data.get('descricao'), "[]"]
     ws.append_row(new_row, value_input_option='USER_ENTERED')
-    return True, "Ocorrência de chamada registrada com sucesso."
+    return True, "Ocorrência registrada com sucesso."
 
-def register_equipment_occurrence(credentials, user_email, data, attachment_paths):
-    """
-    Registra uma ocorrência de equipamento.
-    """
-    ws = _get_worksheet(credentials, EQUIPMENT_SHEET)
-    if not ws: return False, "Falha ao aceder à planilha de ocorrências."
-
-    upload_success, result = _upload_files_to_drive(credentials, attachment_paths)
+def register_equipment_occurrence(user_credentials, user_email, data, attachment_paths):
+    ws = _get_worksheet(EQUIPMENT_SHEET)
+    if not ws: return False, "Falha ao aceder à planilha."
+    upload_success, result = _upload_files_to_drive(user_credentials, attachment_paths)
     if not upload_success: return False, result
-    
     attachment_links_json = json.dumps(result)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     new_id = f"EQUIP-{len(ws.get_all_records()) + 1:04d}"
-    user_name, user_username = _get_user_info(credentials, user_email)
-
-    # --- ALTERAÇÃO AQUI ---
-    new_row = [
-        new_id, now, user_email, user_name, user_username, 'REGISTRADO',
-        data.get('tipo'), data.get('modelo'), data.get('ramal'),
-        data.get('localizacao'), data.get('descricao'), attachment_links_json
-    ]
-    # --- FIM DA ALTERAÇÃO ---
+    user_name, user_username = _get_user_info(user_email)
+    new_row = [new_id, now, user_email, user_name, user_username, 'REGISTRADO', data.get('tipo'), data.get('modelo'), data.get('ramal'), data.get('localizacao'), data.get('descricao'), attachment_links_json]
     ws.append_row(new_row, value_input_option='USER_ENTERED')
-    return True, "Ocorrência de equipamento registrada com sucesso."
+    return True, "Ocorrência registrada com sucesso."
 
-def register_full_occurrence(credentials, user_email, title, testes):
-    ws = _get_worksheet(credentials, CALLS_SHEET)
-    if not ws: return False, "Falha ao aceder à planilha de ocorrências."
+# --- ALTERAÇÃO AQUI ---
+def register_full_occurrence(user_email, title, testes):
+    ws = _get_worksheet(CALLS_SHEET)
+    if not ws: return False, "Falha ao aceder à planilha."
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     new_id = f"CALL-{len(ws.get_all_records()) + 1:04d}"
-    user_name, user_username = _get_user_info(credentials, user_email)
+    user_name, user_username = _get_user_info(user_email)
     op_a = testes[0]['op_a'] if testes else 'N/A'
     op_b = testes[0]['op_b'] if testes else 'N/A'
     testes_json = json.dumps(testes)
+    # A descrição geral agora fica em branco, pois os detalhes estão em cada teste.
     new_row = [new_id, now, title, user_email, user_name, user_username, 'REGISTRADO', op_a, op_b, testes_json, "", "[]"]
     ws.append_row(new_row, value_input_option='USER_ENTERED')
     return True, "Ocorrência detalhada registrada com sucesso."
+# --- FIM DA ALTERAÇÃO ---
 
-def get_all_occurrences(credentials, status_filter=None, role_filter=None, search_term=None):
-    calls_ws = _get_worksheet(credentials, CALLS_SHEET)
-    equip_ws = _get_worksheet(credentials, EQUIPMENT_SHEET)
+def get_all_occurrences(status_filter=None, role_filter=None, search_term=None):
+    calls_ws = _get_worksheet(CALLS_SHEET)
+    equip_ws = _get_worksheet(EQUIPMENT_SHEET)
     all_occurrences = []
     if calls_ws: all_occurrences.extend(calls_ws.get_all_records())
     if equip_ws: all_occurrences.extend(equip_ws.get_all_records())
     if status_filter and status_filter != "Todos":
         all_occurrences = [occ for occ in all_occurrences if occ.get('Status') == status_filter]
     if role_filter and role_filter != "Todos":
-        users_data = get_all_users(credentials)
+        users_data = get_all_users()
         email_to_user_details = {user['email']: user for user in users_data}
         if role_filter in ["partner", "prefeitura", "telecom_user"]:
             all_occurrences = [occ for occ in all_occurrences if email_to_user_details.get(occ.get('Email do Registrador'), {}).get('role') == role_filter]
@@ -176,44 +166,48 @@ def get_all_occurrences(credentials, status_filter=None, role_filter=None, searc
         all_occurrences = [occ for occ in all_occurrences if any(term in str(v).lower() for v in occ.values())]
     return sorted(all_occurrences, key=lambda x: x.get('Data de Registro', ''), reverse=True)
 
-def get_occurrences_by_user(credentials, user_email, search_term=None):
-    user_profile = check_user_status(credentials, user_email)
+def get_occurrences_by_user(user_profile, search_term=None):
     user_role = user_profile.get("role")
-    all_occurrences = get_all_occurrences(credentials)
-    if user_role == 'telecom_user':
-        telecom_user_emails = {u['email'] for u in get_all_users(credentials) if u.get('role') == 'telecom_user'}
-        user_occurrences = [occ for occ in all_occurrences if occ.get("Email do Registrador") in telecom_user_emails]
+    user_company = user_profile.get("company")
+    user_email = user_profile.get("email")
+    all_occurrences = get_all_occurrences(search_term=search_term)
+    user_occurrences = []
+    if user_role in ['admin', 'telecom_user', 'prefeitura']:
+        user_occurrences = all_occurrences
+    elif user_role == 'partner':
+        all_users = get_all_users()
+        company_user_emails = {u['email'] for u in all_users if u.get('company') == user_company}
+        for occ in all_occurrences:
+            if 'CALL' in occ.get('ID', '') and occ.get("Email do Registrador") in company_user_emails:
+                user_occurrences.append(occ)
     else:
         user_occurrences = [occ for occ in all_occurrences if occ.get("Email do Registrador") == user_email]
-    if search_term:
-        term = str(search_term).lower()
-        user_occurrences = [occ for occ in user_occurrences if any(term in str(v).lower() for v in occ.values())]
     return sorted(user_occurrences, key=lambda x: x.get('Data de Registro', ''), reverse=True)
 
-def get_occurrence_by_id(credentials, occurrence_id):
-    for occ in get_all_occurrences(credentials):
+def get_occurrence_by_id(occurrence_id):
+    for occ in get_all_occurrences():
         if str(occ.get('ID')) == str(occurrence_id): return occ
     return None
 
-def update_occurrence_status(credentials, occurrence_id, new_status):
+def update_occurrence_status(occurrence_id, new_status):
     sheet_name = CALLS_SHEET if 'CALL' in occurrence_id else EQUIPMENT_SHEET
-    ws = _get_worksheet(credentials, sheet_name)
+    ws = _get_worksheet(sheet_name)
     if not ws: return
     try:
         cell = ws.find(occurrence_id, in_column=1)
         if cell: ws.update_cell(cell.row, 7, new_status)
     except gspread.exceptions.CellNotFound: print(f"Ocorrência {occurrence_id} não encontrada.")
 
-def get_all_operators(credentials):
-    ws = _get_worksheet(credentials, CALLS_SHEET)
+def get_all_operators():
+    ws = _get_worksheet(CALLS_SHEET)
     if not ws: return ["VIVO", "TIM", "CLARO", "OI"]
     records = ws.get_all_records()
     operators = {rec[key] for rec in records for key in ['Operadora A', 'Operadora B'] if rec.get(key)}
     operators.update(["VIVO FIXO", "CLARO FIXO", "OI FIXO", "TIM", "EMBRATEL", "ALGAR TELECOM", "OUTRA"])
     return sorted(list(operators))
 
-def get_all_partner_companies(credentials):
-    users = get_all_users(credentials)
+def get_all_partner_companies():
+    users = get_all_users()
     return sorted(list({user['company'] for user in users if user.get('role') == 'partner' and user.get('company')}))
 
 def write_to_csv(data_list, file_path):
