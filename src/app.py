@@ -24,7 +24,7 @@ class App(ctk.CTk):
         ctk.set_appearance_mode("System")
         ctk.set_default_color_theme("blue")
 
-        self.credentials = None # Credenciais do UTILIZADOR
+        self.credentials = None 
         self.user_email = "Carregando..."
         self.user_profile = {}
         self.testes_adicionados = []
@@ -188,10 +188,10 @@ class App(ctk.CTk):
     def get_all_users(self):
         return sheets_service.get_all_users()
 
-    def update_user_role(self, email, new_role):
-        sheets_service.update_user_role(email, new_role)
-        messagebox.showinfo("Sucesso", f"O perfil de {email} foi atualizado.")
-        self.frames["AdminDashboardView"].load_all_users()
+    # --- ALTERAÇÃO AQUI ---
+    def update_user_profile(self, email, new_role, new_company=None):
+        sheets_service.update_user_profile(email, new_role, new_company)
+    # --- FIM DA ALTERAÇÃO ---
 
     def get_user_occurrences(self, search_term=None):
         return sheets_service.get_occurrences_by_user(self.user_profile, search_term)
@@ -217,7 +217,6 @@ class App(ctk.CTk):
         success, message = sheets_service.register_equipment_occurrence(self.credentials, self.user_email, data, attachment_paths)
         self.after(0, self._on_submission_finished, "EquipmentView", success, message)
 
-    # --- ALTERAÇÃO AQUI ---
     def submit_full_occurrence(self, title):
         role = self.get_current_user_role()
         if not title:
@@ -234,7 +233,6 @@ class App(ctk.CTk):
     def _submit_full_occurrence_thread(self, title, testes):
         success, message = sheets_service.register_full_occurrence(self.user_email, title, testes)
         self.after(0, self._on_submission_finished, "RegistrationView", success, message)
-    # --- FIM DA ALTERAÇÃO ---
 
     def _on_submission_finished(self, view_name, success, message):
         view = self.frames[view_name]

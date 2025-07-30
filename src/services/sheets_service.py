@@ -98,13 +98,17 @@ def get_all_users():
     ws = _get_worksheet(USERS_SHEET)
     return ws.get_all_records() if ws else []
 
-def update_user_role(email, new_role):
+def update_user_profile(email, new_role, new_company=None):
     ws = _get_worksheet(USERS_SHEET)
     if not ws: return
     try:
         cell = ws.find(email, in_column=1)
-        if cell: ws.update_cell(cell.row, 4, new_role)
-    except gspread.exceptions.CellNotFound: print(f"Usuário {email} não encontrado.")
+        if cell:
+            ws.update_cell(cell.row, 4, new_role)
+            company_to_save = new_company if new_role == 'partner' else ""
+            ws.update_cell(cell.row, 6, company_to_save)
+    except gspread.exceptions.CellNotFound:
+        print(f"Usuário {email} não encontrado.")
 
 def register_simple_call_occurrence(user_email, data):
     ws = _get_worksheet(CALLS_SHEET)
@@ -130,7 +134,6 @@ def register_equipment_occurrence(user_credentials, user_email, data, attachment
     ws.append_row(new_row, value_input_option='USER_ENTERED')
     return True, "Ocorrência registrada com sucesso."
 
-# --- ALTERAÇÃO AQUI ---
 def register_full_occurrence(user_email, title, testes):
     ws = _get_worksheet(CALLS_SHEET)
     if not ws: return False, "Falha ao aceder à planilha."
@@ -139,12 +142,11 @@ def register_full_occurrence(user_email, title, testes):
     user_name, user_username = _get_user_info(user_email)
     op_a = testes[0]['op_a'] if testes else 'N/A'
     op_b = testes[0]['op_b'] if testes else 'N/A'
+    description = testes[0]['obs'] if testes else ""
     testes_json = json.dumps(testes)
-    # A descrição geral agora fica em branco, pois os detalhes estão em cada teste.
-    new_row = [new_id, now, title, user_email, user_name, user_username, 'REGISTRADO', op_a, op_b, testes_json, "", "[]"]
+    new_row = [new_id, now, title, user_email, user_name, user_username, 'REGISTRADO', op_a, op_b, testes_json, description, "[]"]
     ws.append_row(new_row, value_input_option='USER_ENTERED')
     return True, "Ocorrência detalhada registrada com sucesso."
-# --- FIM DA ALTERAÇÃO ---
 
 def get_all_occurrences(status_filter=None, role_filter=None, search_term=None):
     calls_ws = _get_worksheet(CALLS_SHEET)
@@ -169,19 +171,23 @@ def get_all_occurrences(status_filter=None, role_filter=None, search_term=None):
 def get_occurrences_by_user(user_profile, search_term=None):
     user_role = user_profile.get("role")
     user_company = user_profile.get("company")
-    user_email = user_profile.get("email")
     all_occurrences = get_all_occurrences(search_term=search_term)
+    all_users = get_all_users()
     user_occurrences = []
-    if user_role in ['admin', 'telecom_user', 'prefeitura']:
+
+    if user_role in ['admin', 'telecom_user']:
         user_occurrences = all_occurrences
+    elif user_role == 'prefeitura':
+        prefeitura_user_emails = {u['email'] for u in all_users if u.get('role') == 'prefeitura'}
+        user_occurrences = [occ for occ in all_occurrences if occ.get("Email do Registrador") in prefeitura_user_emails]
     elif user_role == 'partner':
-        all_users = get_all_users()
         company_user_emails = {u['email'] for u in all_users if u.get('company') == user_company}
         for occ in all_occurrences:
             if 'CALL' in occ.get('ID', '') and occ.get("Email do Registrador") in company_user_emails:
                 user_occurrences.append(occ)
     else:
-        user_occurrences = [occ for occ in all_occurrences if occ.get("Email do Registrador") == user_email]
+        user_occurrences = [occ for occ in all_occurrences if occ.get("Email do Registrador") == user_profile.get("email")]
+
     return sorted(user_occurrences, key=lambda x: x.get('Data de Registro', ''), reverse=True)
 
 def get_occurrence_by_id(occurrence_id):
@@ -206,9 +212,19 @@ def get_all_operators():
     operators.update(["VIVO FIXO", "CLARO FIXO", "OI FIXO", "TIM", "EMBRATEL", "ALGAR TELECOM", "OUTRA"])
     return sorted(list(operators))
 
+# --- ALTERAÇÃO AQUI: A lista de empresas agora é fixa ---
 def get_all_partner_companies():
-    users = get_all_users()
-    return sorted(list({user['company'] for user in users if user.get('role') == 'partner' and user.get('company')}))
+    """
+    Retorna uma lista fixa de todas as empresas parceiras possíveis.
+    """
+    return sorted([
+        "M2 TELECOMUNICAÇÕES", 
+        "MDA FIBRA", 
+        "DISK SISTEMA TELECOM", 
+        "GMN TELECOM", 
+        "67 INTERNET"
+    ])
+# --- FIM DA ALTERAÇÃO ---
 
 def write_to_csv(data_list, file_path):
     if not data_list: return False, "A lista de dados está vazia."

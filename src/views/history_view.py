@@ -1,6 +1,7 @@
 import customtkinter as ctk
 import threading
 from functools import partial
+import json
 
 class HistoryView(ctk.CTkFrame):
     """Tela para exibir o histórico de ocorrências do usuário."""
@@ -8,17 +9,16 @@ class HistoryView(ctk.CTkFrame):
         super().__init__(parent)
         self.controller = controller
         
-        # --- Configuração da Responsividade da Grelha Principal ---
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
         
-        self.title_label = ctk.CTkLabel(self, text="Meu Histórico de Ocorrências", font=ctk.CTkFont(size=24, weight="bold"))
+        self.title_label = ctk.CTkLabel(self, text="Histórico de Ocorrências", font=ctk.CTkFont(size=24, weight="bold"))
         self.title_label.grid(row=0, column=0, padx=20, pady=(10, 10), sticky="ew")
         
         search_frame = ctk.CTkFrame(self, fg_color="transparent")
         search_frame.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
         
-        self.search_entry = ctk.CTkEntry(search_frame, placeholder_text="Buscar por ID, Título, Data, E-mail...")
+        self.search_entry = ctk.CTkEntry(search_frame, placeholder_text="Buscar em todas as ocorrências visíveis...")
         self.search_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
         
         self.search_button = ctk.CTkButton(search_frame, text="Buscar", width=100, command=self.load_history)
@@ -42,17 +42,17 @@ class HistoryView(ctk.CTkFrame):
         threading.Thread(target=self._load_history_thread, args=(search_term,), daemon=True).start()
 
     def _load_history_thread(self, search_term):
+        occurrences = self.controller.get_user_occurrences(search_term)
         user_role = self.controller.get_current_user_role()
-        if user_role == 'admin':
-            occurrences = self.controller.get_all_occurrences(search_term=search_term)
-        else:
-            occurrences = self.controller.get_user_occurrences(search_term)
-        
         self.after(0, self._populate_history, occurrences, user_role)
 
     def _populate_history(self, occurrences, user_role):
-        if user_role == 'admin':
+        if user_role in ['admin', 'telecom_user']:
             self.title_label.configure(text="Histórico Geral de Ocorrências")
+        elif user_role == 'prefeitura':
+            self.title_label.configure(text="Histórico de Ocorrências da Prefeitura")
+        elif user_role == 'partner':
+            self.title_label.configure(text="Histórico de Ocorrências da Empresa")
         else:
             self.title_label.configure(text="Meu Histórico de Ocorrências")
 
@@ -67,7 +67,6 @@ class HistoryView(ctk.CTkFrame):
             card_frame = ctk.CTkFrame(self.history_scrollable_frame)
             card_frame.pack(fill="x", padx=5, pady=5)
             card_frame.grid_columnconfigure(0, weight=1)
-            card_frame.grid_columnconfigure(1, weight=0)
 
             info_frame = ctk.CTkFrame(card_frame, fg_color="transparent")
             info_frame.grid(row=0, column=0, padx=10, pady=5, sticky="w")
@@ -76,23 +75,23 @@ class HistoryView(ctk.CTkFrame):
             date = item.get('Data de Registro', 'N/A')
             status = item.get('Status', 'N/A')
             
-            title_label = ctk.CTkLabel(info_frame, text=f"ID: {item_id} - {title}", font=ctk.CTkFont(size=14, weight="bold"), anchor="w")
-            title_label.pack(anchor="w")
+            ctk.CTkLabel(info_frame, text=f"ID: {item_id} - {title}", font=ctk.CTkFont(size=14, weight="bold"), anchor="w").pack(anchor="w")
             
-            registrador_nome = item.get('Nome do Registrador', 'N/A')
-            registrador_user = item.get('Username do Registrador', 'N/A')
-            details_text = f"Registrado por: {registrador_nome} (@{registrador_user}) em {date}"
+            details_text = f"Registrado por: {item.get('Nome do Registrador', 'N/A')} (@{item.get('Username do Registrador', 'N/A')}) em {date}"
+            ctk.CTkLabel(info_frame, text=details_text, anchor="w", text_color="gray60").pack(anchor="w")
+            
+            ctk.CTkLabel(info_frame, text=f"Status: {status}", anchor="w", font=ctk.CTkFont(weight="bold")).pack(anchor="w")
 
-            details_label = ctk.CTkLabel(info_frame, text=details_text, anchor="w", text_color="gray60")
-            details_label.pack(anchor="w")
-            
-            status_label = ctk.CTkLabel(info_frame, text=f"Status: {status}", anchor="w", font=ctk.CTkFont(weight="bold"))
-            status_label.pack(anchor="w")
+            # --- ALTERAÇÃO AQUI: Indicador de anexo ---
+            try:
+                anexos = json.loads(item.get('Anexos', '[]'))
+                if anexos:
+                    ctk.CTkLabel(info_frame, text="(Contém Anexos)", text_color="cyan", font=ctk.CTkFont(slant="italic")).pack(anchor="w")
+            except:
+                pass # Ignora erros de JSON se o campo estiver mal formatado
+            # --- FIM DA ALTERAÇÃO ---
 
             open_button = ctk.CTkButton(
-                card_frame,
-                text="Abrir",
-                width=80,
-                command=partial(self.controller.show_occurrence_details, item_id)
+                card_frame, text="Abrir", width=80, command=partial(self.controller.show_occurrence_details, item_id)
             )
             open_button.grid(row=0, column=1, padx=10, pady=10, sticky="e")
