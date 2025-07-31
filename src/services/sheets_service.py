@@ -168,50 +168,39 @@ def get_all_occurrences(status_filter=None, role_filter=None, search_term=None):
         all_occurrences = [occ for occ in all_occurrences if any(term in str(v).lower() for v in occ.values())]
     return sorted(all_occurrences, key=lambda x: x.get('Data de Registro', ''), reverse=True)
 
-# --- ALTERAÇÃO AQUI: Lógica de filtragem do histórico reescrita para maior clareza e correção ---
+# --- ALTERAÇÃO AQUI: Lógica de filtragem do histórico reescrita para maior robustez ---
 def get_occurrences_by_user(user_email, search_term=None):
-    # Busca o perfil mais recente do utilizador para garantir que a role e a empresa estão atualizadas.
     user_profile = check_user_status(user_email)
     if not user_profile:
         return []
 
     user_role = user_profile.get("role")
-    user_company = user_profile.get("company")
+    # Limpa os dados da empresa para garantir uma comparação fiável
+    user_company = user_profile.get("company", "").strip().upper() if user_profile.get("company") else None
 
     all_occurrences = get_all_occurrences(search_term=search_term)
     all_users = get_all_users()
-    
-    # Cria um dicionário para mapear e-mails a detalhes importantes (role, company)
-    # Isto torna a busca de detalhes de um registador mais eficiente.
-    email_to_details = {str(user.get('email')): {'role': user.get('role'), 'company': user.get('company')} for user in all_users}
-    
     user_occurrences = []
 
-    # Se for admin ou 67 telecom, retorna tudo imediatamente.
     if user_role in ['admin', 'telecom_user']:
         return sorted(all_occurrences, key=lambda x: x.get('Data de Registro', ''), reverse=True)
     
-    # Itera por todas as ocorrências e aplica as regras de visibilidade.
-    for occ in all_occurrences:
-        registrador_email = occ.get("Email do Registrador")
-        if not registrador_email:
-            continue
-            
-        registrador_details = email_to_details.get(registrador_email)
-        if not registrador_details:
-            continue
+    elif user_role == 'prefeitura':
+        prefeitura_user_emails = {u['email'] for u in all_users if u.get('role') == 'prefeitura'}
+        user_occurrences = [occ for occ in all_occurrences if occ.get("Email do Registrador") in prefeitura_user_emails]
 
-        registrador_role = registrador_details.get('role')
-        registrador_company = registrador_details.get('company')
-
-        # Regra da Prefeitura: Vê todas as ocorrências de outros utilizadores da prefeitura.
-        if user_role == 'prefeitura' and registrador_role == 'prefeitura':
-            user_occurrences.append(occ)
-            
-        # Regra dos Parceiros: Vê ocorrências de CHAMADA da MESMA empresa.
-        elif user_role == 'partner' and registrador_role == 'partner':
-            if 'CALL' in occ.get('ID', '') and user_company and registrador_company == user_company:
-                user_occurrences.append(occ)
+    elif user_role == 'partner':
+        if user_company:
+            # Compara os nomes das empresas de forma insensível a maiúsculas/minúsculas e espaços
+            company_user_emails = {
+                u['email'] for u in all_users 
+                if u.get('company') and u.get('company').strip().upper() == user_company
+            }
+            for occ in all_occurrences:
+                if 'CALL' in occ.get('ID', '') and occ.get("Email do Registrador") in company_user_emails:
+                    user_occurrences.append(occ)
+    else:
+        user_occurrences = [occ for occ in all_occurrences if occ.get("Email do Registrador") == user_email]
 
     return sorted(user_occurrences, key=lambda x: x.get('Data de Registro', ''), reverse=True)
 # --- FIM DA ALTERAÇÃO ---

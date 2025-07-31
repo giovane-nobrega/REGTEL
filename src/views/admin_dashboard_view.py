@@ -14,12 +14,10 @@ class AdminDashboardView(ctk.CTkFrame):
 
         self.original_statuses = {}
         self.status_updaters = {}
-        self.original_profiles = {} 
-        self.profile_updaters = {} 
+        self.original_profiles = {} # Guarda perfil e empresa
+        self.profile_updaters = {} # Guarda os widgets de perfil e empresa
         self.partner_companies = []
         self.current_analysis_list = []
-        self.status_chart_canvas = None
-        self.operator_chart_canvas = None
 
         ctk.CTkLabel(self, text="Dashboard de Gestão", font=ctk.CTkFont(size=24, weight="bold")).grid(row=0, column=0, padx=20, pady=(10, 10), sticky="ew")
         
@@ -39,166 +37,6 @@ class AdminDashboardView(ctk.CTkFrame):
         back_button = ctk.CTkButton(self, text="Voltar ao Menu", command=lambda: self.controller.show_frame("MainMenuView"), fg_color="gray50", hover_color="gray40")
         back_button.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
 
-    def on_show(self):
-        self.on_tab_change()
-
-    def on_tab_change(self):
-        selected_tab = self.tabview.get()
-        if selected_tab == "Ocorrências": self.load_all_occurrences()
-        elif selected_tab == "Gerenciar Acessos": self.load_access_requests()
-        elif selected_tab == "Gerenciar Usuários": self.load_all_users()
-        # --- CORREÇÃO AQUI: A chamada para aplicar os filtros foi reativada ---
-        elif selected_tab == "Análise de Dados":
-            self._update_group_filter()
-            self.apply_filters()
-        # --- FIM DA CORREÇÃO ---
-
-    # ==============================================================================
-    # --- ABA DE ANÁLISE DE DADOS ---
-    # ==============================================================================
-    def setup_analysis_tab(self):
-        main_analysis_frame = ctk.CTkFrame(self.analysis_tab, fg_color="transparent")
-        main_analysis_frame.pack(fill="both", expand=True)
-        main_analysis_frame.grid_columnconfigure((0, 1), weight=1)
-        main_analysis_frame.grid_rowconfigure(2, weight=1)
-
-        filter_frame = ctk.CTkFrame(main_analysis_frame)
-        filter_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
-        filter_frame.grid_columnconfigure((0, 1, 2), weight=1)
-
-        status_filter_group = ctk.CTkFrame(filter_frame, fg_color="transparent")
-        status_filter_group.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
-        ctk.CTkLabel(status_filter_group, text="Filtrar por Status:").pack(side="top", anchor="w")
-        self.status_filter_menu = ctk.CTkOptionMenu(status_filter_group, values=["Todos", "REGISTRADO", "EM ANÁLISE", "AGUARDANDO TERCEIROS", "RESOLVIDO", "CANCELADO"], command=self.apply_filters)
-        self.status_filter_menu.pack(side="top", fill="x", expand=True)
-
-        role_filter_group = ctk.CTkFrame(filter_frame, fg_color="transparent")
-        role_filter_group.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        ctk.CTkLabel(role_filter_group, text="Filtrar por Grupo:").pack(side="top", anchor="w")
-        self.role_filter_menu = ctk.CTkOptionMenu(role_filter_group, values=["Todos"], command=self.apply_filters)
-        self.role_filter_menu.pack(side="top", fill="x", expand=True)
-
-        export_group = ctk.CTkFrame(filter_frame, fg_color="transparent")
-        export_group.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
-        ctk.CTkLabel(export_group, text="").pack(side="top")
-        export_button = ctk.CTkButton(export_group, text="Exportar para CSV", command=self.export_to_csv)
-        export_button.pack(side="top", fill="x", expand=True)
-
-        self.stats_label = ctk.CTkLabel(main_analysis_frame, text="Estatísticas: Carregando...", justify="left", font=ctk.CTkFont(size=14, weight="bold"))
-        self.stats_label.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=10)
-
-        charts_frame = ctk.CTkFrame(main_analysis_frame, fg_color="transparent")
-        charts_frame.grid(row=2, column=0, columnspan=2, sticky="nsew")
-        charts_frame.grid_columnconfigure((0, 1), weight=1)
-        charts_frame.grid_rowconfigure(0, weight=1)
-
-        self.status_chart_frame = ctk.CTkFrame(charts_frame)
-        self.status_chart_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        
-        self.operator_chart_frame = ctk.CTkFrame(charts_frame)
-        self.operator_chart_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-
-    def export_to_csv(self):
-        if not self.current_analysis_list:
-            messagebox.showwarning("Nenhum Dado", "Não há dados para exportar.")
-            return
-        self.controller.export_analysis_to_csv(self.current_analysis_list)
-
-    def _update_group_filter(self):
-        companies = self.controller.get_partner_companies()
-        options = ["Todos", "Prefeitura", "Parceiros (Geral)", "Colaboradores 67"] + companies
-        self.role_filter_menu.configure(values=options)
-        self.role_filter_menu.set("Todos")
-
-    def apply_filters(self, _=None):
-        status = self.status_filter_menu.get()
-        role_selection = self.role_filter_menu.get()
-
-        role_map = {
-            "Parceiros (Geral)": "partner",
-            "Prefeitura": "prefeitura",
-            "Colaboradores 67": "telecom_user"
-        }
-        role_filter = role_map.get(role_selection, role_selection)
-
-        self.stats_label.configure(text="Estatísticas: Calculando...")
-        for widget in self.status_chart_frame.winfo_children(): widget.destroy()
-        for widget in self.operator_chart_frame.winfo_children(): widget.destroy()
-        ctk.CTkLabel(self.status_chart_frame, text="Carregando...").pack(expand=True)
-        ctk.CTkLabel(self.operator_chart_frame, text="Carregando...").pack(expand=True)
-
-        threading.Thread(target=self._apply_filters_thread, args=(status, role_filter), daemon=True).start()
-
-    def _apply_filters_thread(self, status, role):
-        filtered_list = self.controller.get_all_occurrences(status_filter=status, role_filter=role)
-        self.after(0, self._populate_analysis_results, filtered_list)
-
-    def _populate_analysis_results(self, results):
-        self.current_analysis_list = results
-        for widget in self.status_chart_frame.winfo_children(): widget.destroy()
-        for widget in self.operator_chart_frame.winfo_children(): widget.destroy()
-
-        if not results:
-            self.stats_label.configure(text="Estatísticas: 0 ocorrências encontradas.")
-            ctk.CTkLabel(self.status_chart_frame, text="Nenhum dado para exibir.").pack(expand=True)
-            ctk.CTkLabel(self.operator_chart_frame, text="Nenhum dado para exibir.").pack(expand=True)
-            return
-        
-        total = len(results)
-        status_counts = {"REGISTRADO": 0, "EM ANÁLISE": 0, "AGUARDANDO TERCEIROS": 0, "RESOLVIDO": 0, "CANCELADO": 0}
-        operator_counts = {}
-        for item in results:
-            status = item.get('Status', 'N/A')
-            if status in status_counts: status_counts[status] += 1
-            if 'Operadora A' in item and item['Operadora A']: operator_counts[item['Operadora A']] = operator_counts.get(item['Operadora A'], 0) + 1
-            if 'Operadora B' in item and item['Operadora B']: operator_counts[item['Operadora B']] = operator_counts.get(item['Operadora B'], 0) + 1
-        
-        stats_text = f"Total de Ocorrências Encontradas: {total}"
-        self.stats_label.configure(text=stats_text)
-        
-        self.update_chart(self.status_chart_frame, status_counts, "Ocorrências por Status", "status_chart_canvas")
-        self.update_chart(self.operator_chart_frame, operator_counts, "Menções por Operadora", "operator_chart_canvas")
-
-    def update_chart(self, frame, data, title, canvas_attr_name):
-        try:
-            import matplotlib.pyplot as plt
-            from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-        except ImportError:
-            ctk.CTkLabel(frame, text="Erro: 'matplotlib' é necessário.\nInstale com: pip install matplotlib", wraplength=300).pack(expand=True)
-            return
-
-        if not data or sum(data.values()) == 0:
-            ctk.CTkLabel(frame, text=f"Nenhum dado para o gráfico\n'{title}'").pack(expand=True)
-            return
-
-        labels = [label.replace(" ", "\n") for label in data.keys()]
-        values = data.values()
-        bg_color = "#2B2B2B" if ctk.get_appearance_mode().lower() == "dark" else "#EBEBEB"
-        fg_color = "white" if ctk.get_appearance_mode().lower() == "dark" else "black"
-
-        fig, ax = plt.subplots(figsize=(5, 4), dpi=100)
-        fig.patch.set_facecolor(bg_color) 
-        ax.set_facecolor(bg_color)
-
-        bars = ax.bar(labels, values, color="#1F6AA5")
-        ax.tick_params(axis='x', colors=fg_color, rotation=45, labelsize=8)
-        ax.tick_params(axis='y', colors=fg_color)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['bottom'].set_color('gray')
-        ax.spines['left'].set_color('gray')
-        ax.set_title(title, color=fg_color)
-        fig.tight_layout()
-
-        canvas = FigureCanvasTkAgg(fig, master=frame)
-        if getattr(self, canvas_attr_name, None): getattr(self, canvas_attr_name).get_tk_widget().destroy()
-        setattr(self, canvas_attr_name, canvas)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill="both", expand=True, padx=5, pady=5)
-
-    # ==============================================================================
-    # --- OUTRAS ABAS (sem alterações) ---
-    # ==============================================================================
     def setup_users_tab(self):
         ctk.CTkLabel(self.users_tab, text="Lista de Todos os Usuários").pack(pady=5)
         self.all_users_frame = ctk.CTkScrollableFrame(self.users_tab, label_text="Carregando...")
@@ -360,6 +198,19 @@ class AdminDashboardView(ctk.CTkFrame):
         self.pending_users_frame.pack(fill="both", expand=True, pady=5, padx=5)
         refresh_button = ctk.CTkButton(self.access_tab, text="Atualizar Lista", command=self.load_access_requests)
         refresh_button.pack(pady=5, padx=5, fill="x")
+    
+    def setup_analysis_tab(self):
+        pass
+
+    def on_show(self):
+        self.on_tab_change()
+
+    def on_tab_change(self):
+        selected_tab = self.tabview.get()
+        if selected_tab == "Ocorrências": self.load_all_occurrences()
+        elif selected_tab == "Gerenciar Acessos": self.load_access_requests()
+        elif selected_tab == "Gerenciar Usuários": self.load_all_users()
+        elif selected_tab == "Análise de Dados": pass
 
     def load_access_requests(self):
         self.pending_users_frame.configure(label_text="Carregando solicitações...")

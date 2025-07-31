@@ -192,10 +192,9 @@ class App(ctk.CTk):
         sheets_service.update_user_profile(email, new_role, new_company)
 
     def get_user_occurrences(self, search_term=None):
-        # --- ALTERAÇÃO AQUI: Passa o e-mail do utilizador atual ---
+        # Passa o e-mail do utilizador atual para a função de serviço.
         # A função de serviço irá buscar o perfil mais recente a partir do e-mail.
         return sheets_service.get_occurrences_by_user(self.user_email, search_term)
-        # --- FIM DA ALTERAÇÃO ---
 
     def get_current_user_role(self):
         # Busca o perfil mais recente para garantir que a role está atualizada
