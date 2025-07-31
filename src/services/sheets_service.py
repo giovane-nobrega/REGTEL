@@ -168,27 +168,53 @@ def get_all_occurrences(status_filter=None, role_filter=None, search_term=None):
         all_occurrences = [occ for occ in all_occurrences if any(term in str(v).lower() for v in occ.values())]
     return sorted(all_occurrences, key=lambda x: x.get('Data de Registro', ''), reverse=True)
 
-def get_occurrences_by_user(user_profile, search_term=None):
+# --- ALTERAÇÃO AQUI: Lógica de filtragem do histórico reescrita para maior clareza e correção ---
+def get_occurrences_by_user(user_email, search_term=None):
+    # Busca o perfil mais recente do utilizador para garantir que a role e a empresa estão atualizadas.
+    user_profile = check_user_status(user_email)
+    if not user_profile:
+        return []
+
     user_role = user_profile.get("role")
     user_company = user_profile.get("company")
+
     all_occurrences = get_all_occurrences(search_term=search_term)
     all_users = get_all_users()
+    
+    # Cria um dicionário para mapear e-mails a detalhes importantes (role, company)
+    # Isto torna a busca de detalhes de um registador mais eficiente.
+    email_to_details = {str(user.get('email')): {'role': user.get('role'), 'company': user.get('company')} for user in all_users}
+    
     user_occurrences = []
 
+    # Se for admin ou 67 telecom, retorna tudo imediatamente.
     if user_role in ['admin', 'telecom_user']:
-        user_occurrences = all_occurrences
-    elif user_role == 'prefeitura':
-        prefeitura_user_emails = {u['email'] for u in all_users if u.get('role') == 'prefeitura'}
-        user_occurrences = [occ for occ in all_occurrences if occ.get("Email do Registrador") in prefeitura_user_emails]
-    elif user_role == 'partner':
-        company_user_emails = {u['email'] for u in all_users if u.get('company') == user_company}
-        for occ in all_occurrences:
-            if 'CALL' in occ.get('ID', '') and occ.get("Email do Registrador") in company_user_emails:
+        return sorted(all_occurrences, key=lambda x: x.get('Data de Registro', ''), reverse=True)
+    
+    # Itera por todas as ocorrências e aplica as regras de visibilidade.
+    for occ in all_occurrences:
+        registrador_email = occ.get("Email do Registrador")
+        if not registrador_email:
+            continue
+            
+        registrador_details = email_to_details.get(registrador_email)
+        if not registrador_details:
+            continue
+
+        registrador_role = registrador_details.get('role')
+        registrador_company = registrador_details.get('company')
+
+        # Regra da Prefeitura: Vê todas as ocorrências de outros utilizadores da prefeitura.
+        if user_role == 'prefeitura' and registrador_role == 'prefeitura':
+            user_occurrences.append(occ)
+            
+        # Regra dos Parceiros: Vê ocorrências de CHAMADA da MESMA empresa.
+        elif user_role == 'partner' and registrador_role == 'partner':
+            if 'CALL' in occ.get('ID', '') and user_company and registrador_company == user_company:
                 user_occurrences.append(occ)
-    else:
-        user_occurrences = [occ for occ in all_occurrences if occ.get("Email do Registrador") == user_profile.get("email")]
 
     return sorted(user_occurrences, key=lambda x: x.get('Data de Registro', ''), reverse=True)
+# --- FIM DA ALTERAÇÃO ---
 
 def get_occurrence_by_id(occurrence_id):
     for occ in get_all_occurrences():
@@ -212,11 +238,7 @@ def get_all_operators():
     operators.update(["VIVO FIXO", "CLARO FIXO", "OI FIXO", "TIM", "EMBRATEL", "ALGAR TELECOM", "OUTRA"])
     return sorted(list(operators))
 
-# --- ALTERAÇÃO AQUI: A lista de empresas agora é fixa ---
 def get_all_partner_companies():
-    """
-    Retorna uma lista fixa de todas as empresas parceiras possíveis.
-    """
     return sorted([
         "M2 TELECOMUNICAÇÕES", 
         "MDA FIBRA", 
@@ -224,7 +246,6 @@ def get_all_partner_companies():
         "GMN TELECOM", 
         "67 INTERNET"
     ])
-# --- FIM DA ALTERAÇÃO ---
 
 def write_to_csv(data_list, file_path):
     if not data_list: return False, "A lista de dados está vazia."

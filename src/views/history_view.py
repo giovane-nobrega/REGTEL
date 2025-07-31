@@ -82,15 +82,13 @@ class HistoryView(ctk.CTkFrame):
             
             ctk.CTkLabel(info_frame, text=f"Status: {status}", anchor="w", font=ctk.CTkFont(weight="bold")).pack(anchor="w")
 
-            # --- ALTERAÇÃO AQUI: Indicador de anexo ---
             try:
                 anexos = json.loads(item.get('Anexos', '[]'))
                 if anexos:
                     ctk.CTkLabel(info_frame, text="(Contém Anexos)", text_color="cyan", font=ctk.CTkFont(slant="italic")).pack(anchor="w")
             except:
-                pass # Ignora erros de JSON se o campo estiver mal formatado
-            # --- FIM DA ALTERAÇÃO ---
-
+                pass 
+            
             open_button = ctk.CTkButton(
                 card_frame, text="Abrir", width=80, command=partial(self.controller.show_occurrence_details, item_id)
             )

@@ -188,16 +188,19 @@ class App(ctk.CTk):
     def get_all_users(self):
         return sheets_service.get_all_users()
 
-    # --- ALTERAÇÃO AQUI ---
     def update_user_profile(self, email, new_role, new_company=None):
         sheets_service.update_user_profile(email, new_role, new_company)
-    # --- FIM DA ALTERAÇÃO ---
 
     def get_user_occurrences(self, search_term=None):
-        return sheets_service.get_occurrences_by_user(self.user_profile, search_term)
+        # --- ALTERAÇÃO AQUI: Passa o e-mail do utilizador atual ---
+        # A função de serviço irá buscar o perfil mais recente a partir do e-mail.
+        return sheets_service.get_occurrences_by_user(self.user_email, search_term)
+        # --- FIM DA ALTERAÇÃO ---
 
     def get_current_user_role(self):
-        return self.user_profile.get("role")
+        # Busca o perfil mais recente para garantir que a role está atualizada
+        latest_profile = sheets_service.check_user_status(self.user_email)
+        return latest_profile.get("role")
 
     def submit_simple_call_occurrence(self, form_data):
         view = self.frames["SimpleCallView"]
