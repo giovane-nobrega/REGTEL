@@ -1,56 +1,57 @@
+# ==============================================================================
+# FICHEiro: src/views/occurrence_detail_view.py
+# DESCRIÇÃO: Contém a classe de interface para a janela (Toplevel) que exibe
+#            os detalhes completos de uma ocorrência.
+# ==============================================================================
+
 import customtkinter as ctk
 import json
 import webbrowser
 
-
 class OccurrenceDetailView(ctk.CTkToplevel):
     """
-    Uma janela pop-up para exibir os detalhes completos de uma ocorrência.
+    Uma janela pop-up (Toplevel) para exibir os detalhes completos de uma ocorrência,
+    incluindo todos os campos, testes de ligação e links para anexos.
     """
-
     def __init__(self, master, occurrence_data):
         super().__init__(master)
 
-        self.title(
-            f"Detalhes da Ocorrência: {occurrence_data.get('ID', 'N/A')}")
+        self.title(f"Detalhes da Ocorrência: {occurrence_data.get('ID', 'N/A')}")
         self.geometry("600x650")
+        # Garante que a janela fique sempre à frente da janela principal
         self.transient(master)
         self.grab_set()
 
-        scrollable_frame = ctk.CTkScrollableFrame(
-            self, label_text="Informações da Ocorrência")
+        scrollable_frame = ctk.CTkScrollableFrame(self, label_text="Informações da Ocorrência")
         scrollable_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
+        # --- Exibição dos Dados Gerais ---
         row_counter = 0
         for key, value in occurrence_data.items():
+            # Campos com tratamento especial são ignorados neste loop
             if key in ['Testes', 'Anexos']:
                 continue
 
-            key_label = ctk.CTkLabel(
-                scrollable_frame, text=f"{key}:", font=ctk.CTkFont(weight="bold"))
-            key_label.grid(row=row_counter, column=0,
-                           padx=10, pady=5, sticky="ne")
+            key_label = ctk.CTkLabel(scrollable_frame, text=f"{key}:", font=ctk.CTkFont(weight="bold"))
+            key_label.grid(row=row_counter, column=0, padx=10, pady=5, sticky="ne")
 
-            value_label = ctk.CTkLabel(
-                scrollable_frame, text=value, wraplength=400, justify="left")
-            value_label.grid(row=row_counter, column=1,
-                             padx=10, pady=5, sticky="nw")
+            value_label = ctk.CTkLabel(scrollable_frame, text=value, wraplength=400, justify="left")
+            value_label.grid(row=row_counter, column=1, padx=10, pady=5, sticky="nw")
 
             row_counter += 1
 
+        # --- Exibição dos Testes de Ligação ---
         if 'Testes' in occurrence_data and occurrence_data['Testes']:
             try:
+                # O campo 'Testes' é uma string JSON, então precisa ser convertido
                 testes = json.loads(occurrence_data['Testes'])
                 if testes:
-                    tests_header_label = ctk.CTkLabel(
-                        scrollable_frame, text="Testes de Ligação:", font=ctk.CTkFont(size=14, weight="bold"))
-                    tests_header_label.grid(
-                        row=row_counter, column=0, columnspan=2, padx=10, pady=(15, 5), sticky="w")
+                    tests_header_label = ctk.CTkLabel(scrollable_frame, text="Testes de Ligação:", font=ctk.CTkFont(size=14, weight="bold"))
+                    tests_header_label.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=(15, 5), sticky="w")
                     row_counter += 1
 
                     tests_container = ctk.CTkFrame(scrollable_frame)
-                    tests_container.grid(
-                        row=row_counter, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+                    tests_container.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 
                     for i, teste in enumerate(testes):
                         card_text = (
@@ -61,39 +62,44 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                             f"  - Status: {teste.get('status', 'N/A')}\n"
                             f"  - Obs: {teste.get('obs', 'N/A')}"
                         )
-                        test_card = ctk.CTkLabel(
-                            tests_container, text=card_text, justify="left", anchor="w")
+                        test_card = ctk.CTkLabel(tests_container, text=card_text, justify="left", anchor="w")
                         test_card.pack(fill="x", padx=10, pady=5)
                     row_counter += 1
             except (json.JSONDecodeError, TypeError):
+                # Ignora erros se o JSON for inválido
                 pass
 
+        # --- Exibição dos Anexos ---
         if 'Anexos' in occurrence_data and occurrence_data['Anexos']:
             try:
+                # O campo 'Anexos' também é uma string JSON
                 anexos = json.loads(occurrence_data['Anexos'])
                 if anexos:
-                    anexos_header_label = ctk.CTkLabel(
-                        scrollable_frame, text="Anexos:", font=ctk.CTkFont(size=14, weight="bold"))
-                    anexos_header_label.grid(
-                        row=row_counter, column=0, columnspan=2, padx=10, pady=(15, 5), sticky="w")
+                    anexos_header_label = ctk.CTkLabel(scrollable_frame, text="Anexos:", font=ctk.CTkFont(size=14, weight="bold"))
+                    anexos_header_label.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=(15, 5), sticky="w")
                     row_counter += 1
 
                     anexos_container = ctk.CTkFrame(scrollable_frame)
-                    anexos_container.grid(
-                        row=row_counter, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+                    anexos_container.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 
                     for i, link in enumerate(anexos):
-                        # --- ALTERAÇÃO AQUI: Melhora a aparência e funcionalidade do link ---
+                        # Cria um label que parece e age como um link
                         link_font = ctk.CTkFont(underline=True)
-                        link_label = ctk.CTkLabel(anexos_container, text=f"Anexo {i+1}: Abrir no navegador",
-                                                  text_color=("#1F6AA5", "#58A6FF"), cursor="hand2", font=link_font)
+                        link_label = ctk.CTkLabel(
+                            anexos_container, 
+                            text=f"Anexo {i+1}: Abrir no navegador",
+                            text_color=("#1F6AA5", "#58A6FF"), 
+                            cursor="hand2", 
+                            font=link_font
+                        )
                         link_label.pack(anchor="w", padx=10, pady=2)
-                        link_label.bind("<Button-1>", lambda e,
-                                        url=link: webbrowser.open_new(url))
-                        # --- FIM DA ALTERAÇÃO ---
+                        # Associa o clique do mouse à função que abre o link
+                        link_label.bind("<Button-1>", lambda e, url=link: webbrowser.open_new(url))
 
             except (json.JSONDecodeError, TypeError):
+                # Ignora erros se o JSON for inválido
                 pass
 
+        # --- Botão de Fechar ---
         close_button = ctk.CTkButton(self, text="Fechar", command=self.destroy)
         close_button.pack(pady=10)

@@ -1,9 +1,17 @@
+# ==============================================================================
+# FICHEIRO: src/views/simple_call_view.py
+# DESCRIÇÃO: Contém a classe de interface para o formulário de registo
+#            simplificado de ocorrências de chamada, para a Prefeitura.
+# ==============================================================================
+
 import customtkinter as ctk
 from tkinter import messagebox
 
 class SimpleCallView(ctk.CTkFrame):
-    """Tela para o registro simplificado de chamadas (Prefeitura)."""
-
+    """
+    Tela para o registro simplificado de chamadas, utilizada por utilizadores
+    do grupo Prefeitura.
+    """
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
@@ -15,12 +23,14 @@ class SimpleCallView(ctk.CTkFrame):
         ctk.CTkLabel(self, text="Registrar Ocorrência de Chamada (Simplificado)",
                      font=ctk.CTkFont(size=24, weight="bold")).grid(row=0, column=0, padx=20, pady=(10, 20), sticky="ew")
 
+        # --- Frame Principal do Formulário ---
         form_frame = ctk.CTkFrame(self)
         form_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
         
         form_frame.grid_columnconfigure(1, weight=1)
         form_frame.grid_rowconfigure(2, weight=1) # Linha da descrição expande
 
+        # --- Campos do Formulário ---
         ctk.CTkLabel(form_frame, text="Número de Origem:").grid(
             row=0, column=0, padx=10, pady=10, sticky="w")
         self.entry_num_origem = ctk.CTkEntry(
@@ -41,6 +51,7 @@ class SimpleCallView(ctk.CTkFrame):
         self.description_textbox.grid(
             row=2, column=1, padx=10, pady=10, sticky="nsew")
 
+        # --- Botões de Ação ---
         button_frame = ctk.CTkFrame(self, fg_color="transparent")
         button_frame.grid(row=2, column=0, padx=20, pady=(10, 10), sticky="ew")
         button_frame.grid_columnconfigure((0, 1), weight=1)
@@ -61,19 +72,18 @@ class SimpleCallView(ctk.CTkFrame):
         self.set_submitting_state(False)
 
     def submit(self):
-        """Chama o controlador para submeter a ocorrência."""
+        """Coleta os dados do formulário e os envia para o controlador."""
         form_data = {
             "origem": self.entry_num_origem.get().upper(),
             "destino": self.entry_num_destino.get().upper(),
             "descricao": self.description_textbox.get("1.0", "end-1c").upper()
         }
-        # A passagem de anexos foi removida daqui
         self.controller.submit_simple_call_occurrence(form_data)
 
     def set_submitting_state(self, is_submitting):
-        """Ativa/desativa os botões durante o envio."""
+        """Ativa/desativa os botões durante o processo de envio."""
         if is_submitting:
-            self.submit_button.configure(state="disabled", text="Enviando...")
+            self.submit_button.configure(state="disabled", text="A Enviar...")
         else:
             self.submit_button.configure(
                 state="normal", text="Registrar Ocorrência")

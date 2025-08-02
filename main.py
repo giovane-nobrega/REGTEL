@@ -1,28 +1,48 @@
+# ==============================================================================
+# FICHEIRO: main.py
+# DESCRIÇÃO: Ponto de entrada principal da aplicação Craft Quest.
+#            Configura o ambiente e inicia a janela principal.
+# ==============================================================================
+
 import sys
 import os
-import traceback
+from tkinter import messagebox
 
-# 1. Adiciona a pasta 'src' diretamente ao caminho de busca do Python.
+# Adiciona a pasta 'src' ao caminho do Python para encontrar os módulos
+# (Assumindo que este ficheiro está na raiz do projeto, e os outros em /src)
 SRC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src')
-sys.path.insert(0, SRC_PATH)
+if SRC_PATH not in sys.path:
+    sys.path.insert(0, SRC_PATH)
 
-# 2. Agora que o caminho está configurado, importamos e executamos a aplicação.
-from app import App  # noqa
+try:
+    # Importa a classe principal da aplicação a partir do módulo app
+    from app import App
+except ImportError as e:
+    # Mostra um erro claro se a estrutura de pastas estiver incorreta
+    messagebox.showerror(
+        "Erro de Importação",
+        f"Não foi possível encontrar o módulo 'app'. Verifique a estrutura de pastas.\n\n"
+        f"Detalhes: {e}"
+    )
+    sys.exit(1)
 
-
+# ==============================================================================
+# PONTO DE ENTRADA DA APLICAÇÃO
+# ==============================================================================
 if __name__ == "__main__":
+    """
+    Função principal que é executada quando o script é chamado diretamente.
+    """
     try:
-        print(
-            f"A executar a partir de: {os.path.dirname(os.path.abspath(__file__))}")
-        print(f"Caminho do 'src' adicionado: {SRC_PATH}")
-        print("-" * 20)
-
+        # Cria uma instância da aplicação principal e inicia o seu loop de eventos.
         app = App()
         app.mainloop()
     except Exception as e:
-        print("\n" + "="*20 + " ERRO FATAL " + "="*20)
-        print(f"Ocorreu uma exceção não tratada: {e}")
+        # Captura qualquer erro fatal que não foi tratado dentro da aplicação.
+        messagebox.showerror(
+            "Erro Fatal",
+            f"Ocorreu um erro inesperado e a aplicação será fechada:\n\n{e}"
+        )
+        # Imprime o traceback no terminal para ajudar na depuração.
+        import traceback
         traceback.print_exc()
-        print("="*52)
-        # Mantém a janela do terminal aberta para ver o erro.
-        input("Pressione Enter para fechar...")
