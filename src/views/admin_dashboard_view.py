@@ -1,7 +1,7 @@
 # ==============================================================================
 # FICHEIRO: src/views/admin_dashboard_view.py
 # DESCRIÇÃO: Contém a classe de interface para o Dashboard de Gestão,
-#            usado por administradores para gerir o sistema. (VERSÃO CORRIGIDA)
+#            usado por administradores para gerir o sistema. (VERSÃO ATUALIZADA)
 # ==============================================================================
 
 import customtkinter as ctk
@@ -25,12 +25,16 @@ class AdminDashboardView(ctk.CTkFrame):
         self.original_profiles = {}
         self.profile_updaters = {}
         
+        # Listas de empresas e departamentos
+        self.partner_companies = ["M2 TELECOMUNICAÇÕES", "MDA FIBRA", "DISK SISTEMA TELECOM", "GMN TELECOM", "67 INTERNET"]
+        self.prefeitura_dept_list = ["SECRETARIA DE SAUDE", "SECRETARIA DE OBRAS", "DEPARTAMENTO DE TI", "GUARDA MUNICIPAL", "GABINETE DO PREFEITO", "OUTRO"]
+
         ctk.CTkLabel(self, text="Dashboard de Gestão", font=ctk.CTkFont(size=24, weight="bold")).grid(row=0, column=0, padx=20, pady=(10, 10), sticky="ew")
         
         self.tabview = ctk.CTkTabview(self, command=self.on_tab_change)
         self.tabview.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
         
-        # --- Captura a frame de cada aba no momento da criação ---
+        # Captura a frame de cada aba no momento da criação
         occurrences_tab = self.tabview.add("Ocorrências")
         access_tab = self.tabview.add("Gerenciar Acessos")
         users_tab = self.tabview.add("Gerenciar Usuários")
@@ -55,7 +59,7 @@ class AdminDashboardView(ctk.CTkFrame):
         elif selected_tab == "Gerenciar Usuários": self.load_all_users()
 
     # --- ABA DE GESTÃO DE OCORRÊNCIAS ---
-    def setup_occurrences_tab(self, tab): # Aceita a frame da aba como argumento
+    def setup_occurrences_tab(self, tab):
         ctk.CTkLabel(tab, text="Visão Geral de Todas as Ocorrências").pack(pady=5)
         self.all_occurrences_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando...")
         self.all_occurrences_frame.pack(fill="both", expand=True, pady=5, padx=5)
@@ -103,7 +107,7 @@ class AdminDashboardView(ctk.CTkFrame):
         self.controller.save_occurrence_status_changes(changes)
 
     # --- ABA DE GESTÃO DE ACESSOS ---
-    def setup_access_tab(self, tab): # Aceita a frame da aba como argumento
+    def setup_access_tab(self, tab):
         ctk.CTkLabel(tab, text="Solicitações de Acesso Pendentes").pack(pady=5)
         self.pending_users_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando...")
         self.pending_users_frame.pack(fill="both", expand=True, pady=5, padx=5)
@@ -129,7 +133,7 @@ class AdminDashboardView(ctk.CTkFrame):
             ctk.CTkButton(card, text="Aprovar", command=partial(self.controller.update_user_access, user['email'], 'approved'), fg_color="green").pack(side="right", padx=5, pady=5)
 
     # --- ABA DE GESTÃO DE USUÁRIOS ---
-    def setup_users_tab(self, tab): # Aceita a frame da aba como argumento
+    def setup_users_tab(self, tab):
         ctk.CTkLabel(tab, text="Lista de Todos os Usuários").pack(pady=5)
         self.all_users_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando...")
         self.all_users_frame.pack(fill="both", expand=True, pady=5, padx=5)
@@ -176,17 +180,27 @@ class AdminDashboardView(ctk.CTkFrame):
             sub_group_combo.set(user.get('sub_group'))
             sub_group_combo.pack(side="left", padx=(0, 5))
 
-            company_entry = ctk.CTkEntry(controls_frame, placeholder_text="Empresa/Depto", width=180)
-            company_entry.insert(0, user.get('company', ''))
+            # --- ALTERAÇÃO AQUI: Usa ComboBox em vez de Entry ---
+            company_combo = ctk.CTkComboBox(controls_frame, values=[], width=180)
+            company_combo.set(user.get('company', ''))
             
-            self.profile_updaters[email] = {'main_group': main_group_combo, 'sub_group': sub_group_combo, 'company': company_entry}
+            self.profile_updaters[email] = {'main_group': main_group_combo, 'sub_group': sub_group_combo, 'company': company_combo}
             self._on_main_group_change(email, user.get('main_group'))
 
     def _on_main_group_change(self, email, selected_group):
-        """Mostra ou esconde o campo de empresa com base no grupo principal."""
+        """Mostra e configura o ComboBox de empresa com base no grupo principal."""
         if self.profile_updaters.get(email, {}).get('company'):
             company_widget = self.profile_updaters[email]['company']
-            if selected_group in ['PARTNER', 'PREFEITURA']:
+            
+            if selected_group == 'PARTNER':
+                company_widget.configure(values=self.partner_companies)
+                if company_widget.get() not in self.partner_companies:
+                    company_widget.set(self.partner_companies[0] if self.partner_companies else "")
+                company_widget.pack(side="left")
+            elif selected_group == 'PREFEITURA':
+                company_widget.configure(values=self.prefeitura_dept_list)
+                if company_widget.get() not in self.prefeitura_dept_list:
+                    company_widget.set(self.prefeitura_dept_list[0] if self.prefeitura_dept_list else "")
                 company_widget.pack(side="left")
             else:
                 company_widget.pack_forget()

@@ -2,7 +2,7 @@
 # FICHEIRO: src/views/main_menu_view.py
 # DESCRIÇÃO: Contém a classe de interface para o menu principal da aplicação,
 #            que exibe botões de ação dinamicamente com base no perfil do
-#            utilizador. (VERSÃO CORRIGIDA)
+#            utilizador.
 # ==============================================================================
 
 import customtkinter as ctk
@@ -62,26 +62,29 @@ class MainMenuView(ctk.CTkFrame):
         # Define a linha inicial para os botões de perfil
         next_row = 2
             
-        # Lógica para o grupo 67 Telecom
-        if main_group == "67_TELECOM":
-            if sub_group in ["SUPER_ADMIN", "ADMIN"]:
-                self.admin_button.grid(row=next_row, column=0, pady=8, padx=20)
-                next_row += 1
-            # Todos os utilizadores da 67 Telecom podem fazer registo detalhado
-            self.partner_button.grid(row=next_row, column=0, pady=8, padx=20)
-            next_row += 1
+        # Lógica especial para SUPER_ADMIN
+        if main_group == "67_TELECOM" and sub_group == "SUPER_ADMIN":
+            # O SUPER_ADMIN vê todos os botões de função
+            self.title_label.configure(text=f"Menu Super Admin: {user_profile.get('name')}")
+            self.admin_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
+            self.partner_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
+            self.prefeitura_call_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
+            self.prefeitura_equip_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
+        
+        # Lógica para os outros utilizadores
+        elif main_group == "67_TELECOM" and sub_group == "ADMIN":
+            self.admin_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
+            self.partner_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
+            
+        elif main_group == "67_TELECOM": # MANAGER e USER
+            self.partner_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
 
-        # Lógica para o grupo Parceiros
         elif main_group == "PARTNER":
-            self.partner_button.grid(row=next_row, column=0, pady=8, padx=20)
-            next_row += 1
+            self.partner_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
 
-        # Lógica para o grupo Prefeitura
         elif main_group == "PREFEITURA":
-            self.prefeitura_call_button.grid(row=next_row, column=0, pady=8, padx=20)
-            next_row += 1
-            self.prefeitura_equip_button.grid(row=next_row, column=0, pady=8, padx=20)
-            next_row += 1
+            self.prefeitura_call_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
+            self.prefeitura_equip_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
             
         # Botões comuns a todos os perfis
         self.history_button.grid(row=next_row, column=0, pady=8, padx=20)

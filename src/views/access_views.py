@@ -1,7 +1,7 @@
 # ==============================================================================
 # FICHEIRO: src/views/access_views.py
 # DESCRIÇÃO: Contém as classes de interface para o fluxo de solicitação
-#            e aprovação de acesso de novos utilizadores. (VERSÃO CORRIGIDA)
+#            e aprovação de acesso de novos utilizadores.
 # ==============================================================================
 
 import customtkinter as ctk
@@ -15,6 +15,7 @@ class RequestAccessView(ctk.CTkFrame):
         
         # --- Listas de Opções ---
         self.partner_list = ["M2 TELECOMUNICAÇÕES", "MDA FIBRA", "DISK SISTEMA TELECOM", "GMN TELECOM", "67 INTERNET"]
+        # Departamentos genéricos da Prefeitura
         self.prefeitura_dept_list = ["SECRETARIA DE SAUDE", "SECRETARIA DE OBRAS", "DEPARTAMENTO DE TI", "GUARDA MUNICIPAL", "GABINETE DO PREFEITO", "OUTRO"]
 
         # --- Configuração da Responsividade ---
@@ -24,8 +25,7 @@ class RequestAccessView(ctk.CTkFrame):
         center_frame = ctk.CTkFrame(self, fg_color="transparent")
         center_frame.grid(row=0, column=0)
         
-        # --- Widgets da Interface ---
-        # Todos os widgets são criados primeiro
+        # --- Widgets da Interface (Criação) ---
         title = ctk.CTkLabel(center_frame, text="Solicitação de Acesso", font=ctk.CTkFont(size=24, weight="bold"))
         subtitle = ctk.CTkLabel(center_frame, text="O seu e-mail não está registrado. Por favor, preencha seus dados para solicitar o acesso.", wraplength=400)
         
@@ -45,7 +45,6 @@ class RequestAccessView(ctk.CTkFrame):
         self.logout_button = ctk.CTkButton(center_frame, text="Sair", command=self.controller.perform_logout, fg_color="gray50")
 
         # --- Posicionamento dos Widgets (Packing) ---
-        # A ordem do .pack() define a ordem visual
         title.pack(pady=(0,10))
         subtitle.pack(pady=(0, 20))
         name_label.pack(anchor="w", padx=20)
@@ -55,7 +54,7 @@ class RequestAccessView(ctk.CTkFrame):
         role_label.pack(anchor="w", padx=20)
         self.role_combobox.pack(pady=(0,10), padx=20, fill="x")
         
-        # Os widgets condicionais são posicionados pela função _on_role_selected
+        # Widgets condicionais são posicionados e configurados pela função _on_role_selected
         self.company_name_label.pack(anchor="w", padx=20)
         self.company_name_combobox.pack(pady=(0,10), padx=20, fill="x")
         
@@ -68,25 +67,22 @@ class RequestAccessView(ctk.CTkFrame):
     def _on_role_selected(self, selected_role):
         """Mostra ou esconde o campo de empresa/departamento com base no vínculo."""
         if selected_role == "Parceiro":
-            # Re-empacota os widgets se eles já foram escondidos
             self.company_name_label.pack(anchor="w", padx=20, before=self.submit_button)
             self.company_name_combobox.pack(pady=(0,10), padx=20, fill="x", before=self.submit_button)
             
             self.company_name_label.configure(text="Selecione a Empresa Parceira:")
             self.company_name_combobox.configure(values=self.partner_list)
-            self.company_name_combobox.set(self.partner_list[0])
+            self.company_name_combobox.set(self.partner_list[0] if self.partner_list else "")
             
         elif selected_role == "Prefeitura":
-            # Re-empacota os widgets se eles já foram escondidos
             self.company_name_label.pack(anchor="w", padx=20, before=self.submit_button)
             self.company_name_combobox.pack(pady=(0,10), padx=20, fill="x", before=self.submit_button)
             
             self.company_name_label.configure(text="Selecione o Departamento:")
             self.company_name_combobox.configure(values=self.prefeitura_dept_list)
-            self.company_name_combobox.set(self.prefeitura_dept_list[0])
+            self.company_name_combobox.set(self.prefeitura_dept_list[0] if self.prefeitura_dept_list else "")
             
         else: # Colaboradores 67
-            # Usa pack_forget() para esconder os widgets sem os destruir
             self.company_name_label.pack_forget()
             self.company_name_combobox.pack_forget()
 

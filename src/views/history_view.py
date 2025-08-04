@@ -2,6 +2,7 @@
 # FICHEIRO: src/views/history_view.py
 # DESCRIÇÃO: Contém a classe de interface para a tela de histórico de
 #            ocorrências, que exibe os registos visíveis ao utilizador.
+#            (VERSÃO OTIMIZADA COM CACHE)
 # ==============================================================================
 
 import customtkinter as ctk
@@ -11,16 +12,17 @@ import json
 
 class HistoryView(ctk.CTkFrame):
     """
-    Tela para exibir o histórico de ocorrências do utilizador.
-    O conteúdo exibido é filtrado com base nas permissões do perfil do utilizador.
+    Tela para exibir o histórico de ocorrências do utilizador, com cache
+    para otimizar a performance da busca.
     """
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
+        self.cached_occurrences = [] # Cache para guardar os dados
         
         # --- Configuração da Responsividade ---
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(2, weight=1) # A área de scroll expande
+        self.grid_rowconfigure(2, weight=1)
         
         self.title_label = ctk.CTkLabel(self, text="Histórico de Ocorrências", font=ctk.CTkFont(size=24, weight="bold"))
         self.title_label.grid(row=0, column=0, padx=20, pady=(10, 10), sticky="ew")
@@ -29,17 +31,19 @@ class HistoryView(ctk.CTkFrame):
         search_frame = ctk.CTkFrame(self, fg_color="transparent")
         search_frame.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
         
-        self.search_entry = ctk.CTkEntry(search_frame, placeholder_text="Buscar em todas as ocorrências visíveis...")
+        self.search_entry = ctk.CTkEntry(search_frame, placeholder_text="Buscar no histórico carregado...")
         self.search_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
         
-        self.search_button = ctk.CTkButton(search_frame, text="Buscar", width=100, command=self.load_history)
+        self.search_button = ctk.CTkButton(search_frame, text="Buscar", width=100, command=self.filter_history)
         self.search_button.pack(side="left")
+
+        self.refresh_button = ctk.CTkButton(search_frame, text="Recarregar", width=100, command=self.load_history, fg_color="gray50", hover_color="gray40")
+        self.refresh_button.pack(side="left", padx=(5, 0))
 
         # --- Frame de Scroll para a Lista de Ocorrências ---
         self.history_scrollable_frame = ctk.CTkScrollableFrame(self, label_text="Carregando histórico...")
         self.history_scrollable_frame.grid(row=2, column=0, padx=20, pady=10, sticky="nsew")
         
-        # --- Botão de Voltar ---
         back_button = ctk.CTkButton(self, text="Voltar ao Menu", command=lambda: controller.show_frame("MainMenuView"), fg_color="gray50", hover_color="gray40")
         back_button.grid(row=3, column=0, padx=20, pady=(0, 10), sticky="ew")
 
@@ -49,40 +53,50 @@ class HistoryView(ctk.CTkFrame):
         self.load_history()
 
     def load_history(self):
-        """Inicia o carregamento do histórico numa thread separada."""
-        search_term = self.search_entry.get()
-        self.history_scrollable_frame.configure(label_text="Carregando...")
-        # Limpa a lista antiga antes de carregar a nova
+        """Inicia o carregamento FORÇADO do histórico a partir do Google Sheets."""
+        self.history_scrollable_frame.configure(label_text="Carregando histórico...")
         for widget in self.history_scrollable_frame.winfo_children():
             widget.destroy()
-        threading.Thread(target=self._load_history_thread, args=(search_term,), daemon=True).start()
+        threading.Thread(target=self._load_history_thread, daemon=True).start()
 
-    def _load_history_thread(self, search_term):
-        """Busca os dados no serviço e depois chama a função de atualização da UI."""
-        occurrences = self.controller.get_user_occurrences(search_term)
+    def _load_history_thread(self):
+        """Busca os dados no serviço, armazena no cache e chama a atualização da UI."""
+        # --- CORREÇÃO AQUI: A chamada não passa mais argumentos ---
+        self.cached_occurrences = self.controller.get_user_occurrences()
         user_profile = self.controller.get_current_user_profile()
-        # Volta para a thread principal para atualizar a interface
-        self.after(0, self._populate_history, occurrences, user_profile)
+        self.after(0, self._populate_history, self.cached_occurrences, user_profile)
+
+    def filter_history(self):
+        """Filtra a lista JÁ CARREGADA (cache) com base no termo de pesquisa."""
+        search_term = self.search_entry.get().lower()
+        if not search_term:
+            self._populate_history(self.cached_occurrences, self.controller.get_current_user_profile())
+            return
+
+        filtered_list = [
+            occ for occ in self.cached_occurrences
+            if any(search_term in str(v).lower() for v in occ.values())
+        ]
+        self._populate_history(filtered_list, self.controller.get_current_user_profile())
 
     def _populate_history(self, occurrences, user_profile):
         """Preenche a lista de scroll com os cards das ocorrências."""
-        # Atualiza o título da página com base no perfil do utilizador
         main_group = user_profile.get("main_group")
-        if main_group == '67_TELECOM' and user_profile.get("sub_group") in ['SUPER_ADMIN', 'ADMIN', 'MANAGER']:
+        if main_group == '67_TELECOM':
             self.title_label.configure(text="Histórico Geral de Ocorrências")
         elif main_group in ['PARTNER', 'PREFEITURA']:
             company = user_profile.get("company", "N/A")
             self.title_label.configure(text=f"Histórico de Ocorrências: {company}")
-        else:
-            self.title_label.configure(text="Meu Histórico de Ocorrências")
+        
+        for widget in self.history_scrollable_frame.winfo_children():
+            widget.destroy()
 
         if not occurrences:
-            self.history_scrollable_frame.configure(label_text="Nenhuma ocorrência encontrada.")
+            self.history_scrollable_frame.configure(label_text="Nenhuma ocorrência encontrada para os filtros aplicados.")
             return
             
         self.history_scrollable_frame.configure(label_text="")
         
-        # Cria um card para cada ocorrência
         for item in occurrences:
             item_id = item.get('ID', 'N/A')
             
@@ -93,25 +107,13 @@ class HistoryView(ctk.CTkFrame):
             info_frame = ctk.CTkFrame(card_frame, fg_color="transparent")
             info_frame.grid(row=0, column=0, padx=10, pady=5, sticky="w")
             
-            title = item.get('Título da Ocorrência', item.get('Tipo de Equipamento', 'N/A'))
+            title = item.get('Título da Ocorrência', 'Ocorrência sem Título')
             date = item.get('Data de Registro', 'N/A')
             status = item.get('Status', 'N/A')
             
             ctk.CTkLabel(info_frame, text=f"ID: {item_id} - {title}", font=ctk.CTkFont(size=14, weight="bold"), anchor="w").pack(anchor="w")
-            
-            details_text = f"Registrado por: {item.get('Nome do Registrador', 'N/A')} (@{item.get('Username do Registrador', 'N/A')}) em {date}"
-            ctk.CTkLabel(info_frame, text=details_text, anchor="w", text_color="gray60").pack(anchor="w")
-            
+            ctk.CTkLabel(info_frame, text=f"Registrado por: {item.get('Nome do Registrador', 'N/A')} em {date}", anchor="w", text_color="gray60").pack(anchor="w")
             ctk.CTkLabel(info_frame, text=f"Status: {status}", anchor="w", font=ctk.CTkFont(weight="bold")).pack(anchor="w")
 
-            try:
-                anexos = json.loads(item.get('Anexos', '[]'))
-                if anexos:
-                    ctk.CTkLabel(info_frame, text="(Contém Anexos)", text_color="cyan", font=ctk.CTkFont(slant="italic")).pack(anchor="w")
-            except (json.JSONDecodeError, TypeError):
-                pass 
-            
-            open_button = ctk.CTkButton(
-                card_frame, text="Abrir", width=80, command=partial(self.controller.show_occurrence_details, item_id)
-            )
+            open_button = ctk.CTkButton(card_frame, text="Abrir", width=80, command=partial(self.controller.show_occurrence_details, item_id))
             open_button.grid(row=0, column=1, padx=10, pady=10, sticky="e")

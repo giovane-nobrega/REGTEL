@@ -8,7 +8,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 import threading
 
-# Importações dos módulos de serviço e das views, respeitando a estrutura de pastas
+# Importações dos módulos de serviço e das views
 from services.auth_service import AuthService
 from services.sheets_service import SheetsService
 from views.access_views import RequestAccessView, PendingApprovalView
@@ -66,54 +66,47 @@ class App(ctk.CTk):
             self.frames[page_name] = frame
             frame.place(relwidth=1.0, relheight=1.0)
         
-        # Inicia a verificação de login ao arrancar a aplicação
+        # Inicia a verificação de login
         self.check_initial_login()
 
     def show_frame(self, page_name):
-        """Traz uma frame (tela) específica para a frente."""
+        """Traz uma frame para a frente."""
         frame = self.frames[page_name]
-        # Se a frame tiver um método 'on_show', executa-o (para limpar campos, etc.)
         if hasattr(frame, 'on_show'):
             frame.on_show()
         frame.tkraise()
 
     def show_occurrence_details(self, occurrence_id):
         """Abre a janela de detalhes da ocorrência."""
-        # Impede que múltiplas janelas de detalhe sejam abertas
         if self.detail_window and self.detail_window.winfo_exists():
             self.detail_window.focus()
             return
-        
         occurrence_data = self.sheets_service.get_occurrence_by_id(occurrence_id)
         if occurrence_data:
-            # Cria uma nova instância da janela de detalhes
             self.detail_window = OccurrenceDetailView(self, occurrence_data)
         else:
             messagebox.showerror("Erro", "Não foi possível encontrar os detalhes da ocorrência.")
 
     def check_initial_login(self):
-        """Verifica se já existem credenciais de login salvas no sistema."""
+        """Verifica se já existem credenciais salvas."""
         self.frames["LoginView"].set_loading_state("Verificando credenciais...")
-        # Executa a verificação numa thread para não bloquear a interface
         threading.Thread(target=self._check_initial_login_thread, daemon=True).start()
 
     def _check_initial_login_thread(self):
         creds = self.auth_service.load_user_credentials()
         if creds:
             self.credentials = creds
-            # Volta para a thread principal para atualizar a UI
             self.after(0, self._fetch_user_profile)
         else:
-            # Se não houver credenciais, mostra a tela de login
             self.after(0, self.frames["LoginView"].set_default_state)
             self.after(0, self.show_frame, "LoginView")
             
     def load_secondary_data(self):
-        """Carrega dados secundários (como a lista de operadoras) em background."""
+        """Carrega dados secundários em background após o login."""
         threading.Thread(target=self._load_operators_thread, daemon=True).start()
 
     def _load_operators_thread(self):
-        """Busca a lista de operadoras e atualiza o widget de autocomplete."""
+        """Carrega a lista de operadoras para o autocomplete."""
         self.operator_list = self.sheets_service.get_all_operators()
         if "RegistrationView" in self.frames:
             self.after(0, self.frames["RegistrationView"].set_operator_suggestions, self.operator_list)
@@ -134,7 +127,7 @@ class App(ctk.CTk):
             self.after(0, self.frames["LoginView"].set_default_state)
 
     def _fetch_user_profile(self):
-        """Após a autenticação, busca os dados do perfil do usuário na planilha."""
+        """Busca o perfil do usuário após a autenticação."""
         self.user_email = self.auth_service.get_user_email(self.credentials)
         if "Erro" in self.user_email:
             self.after(0, lambda: messagebox.showerror("Erro de Autenticação", "Não foi possível obter o seu e-mail."))
@@ -145,13 +138,27 @@ class App(ctk.CTk):
         self.after(0, self.navigate_based_on_status)
 
     def navigate_based_on_status(self):
-        """Navega para a tela correta com base no status do usuário ('approved', 'pending', etc.)."""
+        """Navega para a tela correta com base no status e perfil do usuário."""
         status = self.user_profile.get("status")
+        main_group = self.user_profile.get("main_group")
+        sub_group = self.user_profile.get("sub_group")
+
         if status == "approved":
             self.load_secondary_data()
+            
+            # --- CORREÇÃO AQUI: Prepara o menu principal para todos os usuários ---
+            # Garante que o menu principal esteja sempre configurado corretamente em segundo plano.
             main_menu = self.frames["MainMenuView"]
             main_menu.update_user_info(self.user_email, self.user_profile)
+
+            # Rota especial para SUPER_ADMIN: vai direto para o Dashboard
+            if main_group == "67_TELECOM" and sub_group == "SUPER_ADMIN":
+                self.show_frame("AdminDashboardView")
+                return # Termina a função aqui para não mostrar o menu inicialmente
+
+            # Rota padrão para os outros usuários: vai para o Menu Principal
             self.show_frame("MainMenuView")
+
         elif status == "pending":
             self.show_frame("PendingApprovalView")
         else: # 'unregistered' ou outro status
@@ -159,7 +166,7 @@ class App(ctk.CTk):
             self.show_frame("RequestAccessView")
 
     def perform_logout(self):
-        """Realiza o logout do usuário, limpando as credenciais e o estado."""
+        """Realiza o logout do usuário."""
         self.auth_service.logout()
         self.credentials = None
         self.user_email = None
@@ -178,19 +185,15 @@ class App(ctk.CTk):
             self.show_frame("PendingApprovalView")
     
     # --- Métodos de delegação para os serviços ---
-    # Estes métodos simplesmente chamam as funções correspondentes nos serviços,
-    # mantendo o 'app.py' como o único ponto de contacto para as views.
-    
-    def get_pending_requests(self):
-        return self.sheets_service.get_pending_requests()
+    def get_pending_requests(self): return self.sheets_service.get_pending_requests()
     
     def update_user_access(self, email, new_status):
         self.sheets_service.update_user_status(email, new_status)
         messagebox.showinfo("Sucesso", f"O acesso para {email} foi atualizado.")
         self.frames["AdminDashboardView"].load_access_requests()
 
-    def get_all_occurrences(self, search_term=None):
-        return self.sheets_service.get_all_occurrences(search_term=search_term)
+    def get_all_occurrences(self):
+        return self.sheets_service.get_all_occurrences()
 
     def save_occurrence_status_changes(self, changes):
         if not changes:
@@ -201,17 +204,15 @@ class App(ctk.CTk):
         messagebox.showinfo("Sucesso", f"{len(changes)} alterações foram salvas.")
         self.frames["AdminDashboardView"].load_all_occurrences()
 
-    def get_all_users(self):
-        return self.sheets_service.get_all_users()
+    def get_all_users(self): return self.sheets_service.get_all_users()
     
     def update_user_profile(self, email, main_group, sub_group, company): 
         self.sheets_service.update_user_profile(email, main_group, sub_group, company)
         
-    def get_user_occurrences(self, search_term=None): 
-        return self.sheets_service.get_occurrences_by_user(self.user_email, search_term)
+    def get_user_occurrences(self): 
+        return self.sheets_service.get_occurrences_by_user(self.user_email)
 
     def get_current_user_profile(self):
-        # Busca o perfil mais recente para garantir que os dados estão atualizados
         return self.sheets_service.check_user_status(self.user_email)
 
     def submit_simple_call_occurrence(self, form_data):
