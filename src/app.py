@@ -1,7 +1,6 @@
 # ==============================================================================
 # FICHEIRO: src/app.py
-# DESCRIÇÃO: Controlador principal da aplicação. Orquestra a lógica,
-#            serviços e navegação entre as diferentes views.
+# DESCRIÇÃO: Controlador principal da aplicação. (VERSÃO FINAL CORRIGIDA)
 # ==============================================================================
 
 import customtkinter as ctk
@@ -23,9 +22,6 @@ from views.simple_call_view import SimpleCallView
 
 
 class App(ctk.CTk):
-    """
-    Classe principal da aplicação, herda de ctk.CTk para ser a janela raiz.
-    """
     def __init__(self):
         super().__init__()
         self.title("Plataforma de Registro de Ocorrências (Craft Quest)")
@@ -34,11 +30,9 @@ class App(ctk.CTk):
         ctk.set_appearance_mode("System")
         ctk.set_default_color_theme("blue")
 
-        # Inicialização dos serviços
         self.auth_service = AuthService()
         self.sheets_service = SheetsService(self.auth_service)
 
-        # Variáveis de estado da aplicação
         self.credentials = None
         self.user_email = "Carregando..."
         self.user_profile = {}
@@ -46,38 +40,35 @@ class App(ctk.CTk):
         self.testes_adicionados = []
         self.editing_index = None
         self.operator_list = []
+        
+        self.occurrences_cache = None
+        self.users_cache = None
 
-        # Container principal para as telas (views)
         container = ctk.CTkFrame(self)
         container.pack(fill="both", expand=True)
 
         self.frames = {}
-        # Lista de todas as classes de View que a aplicação utiliza
         view_classes = (
             LoginView, RequestAccessView, PendingApprovalView, MainMenuView,
             AdminDashboardView, HistoryView, RegistrationView, SimpleCallView,
             EquipmentView
         )
 
-        # Itera sobre as classes de View para inicializá-las e armazená-las
         for F in view_classes:
             page_name = F.__name__
             frame = F(parent=container, controller=self)
             self.frames[page_name] = frame
             frame.place(relwidth=1.0, relheight=1.0)
         
-        # Inicia a verificação de login
         self.check_initial_login()
 
     def show_frame(self, page_name):
-        """Traz uma frame para a frente."""
         frame = self.frames[page_name]
         if hasattr(frame, 'on_show'):
             frame.on_show()
         frame.tkraise()
 
     def show_occurrence_details(self, occurrence_id):
-        """Abre a janela de detalhes da ocorrência."""
         if self.detail_window and self.detail_window.winfo_exists():
             self.detail_window.focus()
             return
@@ -88,7 +79,6 @@ class App(ctk.CTk):
             messagebox.showerror("Erro", "Não foi possível encontrar os detalhes da ocorrência.")
 
     def check_initial_login(self):
-        """Verifica se já existem credenciais salvas."""
         self.frames["LoginView"].set_loading_state("Verificando credenciais...")
         threading.Thread(target=self._check_initial_login_thread, daemon=True).start()
 
@@ -102,17 +92,14 @@ class App(ctk.CTk):
             self.after(0, self.show_frame, "LoginView")
             
     def load_secondary_data(self):
-        """Carrega dados secundários em background após o login."""
         threading.Thread(target=self._load_operators_thread, daemon=True).start()
 
     def _load_operators_thread(self):
-        """Carrega a lista de operadoras para o autocomplete."""
         self.operator_list = self.sheets_service.get_all_operators()
         if "RegistrationView" in self.frames:
             self.after(0, self.frames["RegistrationView"].set_operator_suggestions, self.operator_list)
 
     def perform_login(self):
-        """Inicia o fluxo de login do Google."""
         self.frames["LoginView"].set_loading_state("Aguarde... Abrindo o navegador")
         threading.Thread(target=self._run_login_flow_in_thread, daemon=True).start()
 
@@ -127,7 +114,6 @@ class App(ctk.CTk):
             self.after(0, self.frames["LoginView"].set_default_state)
 
     def _fetch_user_profile(self):
-        """Busca o perfil do usuário após a autenticação."""
         self.user_email = self.auth_service.get_user_email(self.credentials)
         if "Erro" in self.user_email:
             self.after(0, lambda: messagebox.showerror("Erro de Autenticação", "Não foi possível obter o seu e-mail."))
@@ -138,7 +124,6 @@ class App(ctk.CTk):
         self.after(0, self.navigate_based_on_status)
 
     def navigate_based_on_status(self):
-        """Navega para a tela correta com base no status e perfil do usuário."""
         status = self.user_profile.get("status")
         main_group = self.user_profile.get("main_group")
         sub_group = self.user_profile.get("sub_group")
@@ -146,27 +131,22 @@ class App(ctk.CTk):
         if status == "approved":
             self.load_secondary_data()
             
-            # --- CORREÇÃO AQUI: Prepara o menu principal para todos os usuários ---
-            # Garante que o menu principal esteja sempre configurado corretamente em segundo plano.
             main_menu = self.frames["MainMenuView"]
             main_menu.update_user_info(self.user_email, self.user_profile)
 
-            # Rota especial para SUPER_ADMIN: vai direto para o Dashboard
             if main_group == "67_TELECOM" and sub_group == "SUPER_ADMIN":
                 self.show_frame("AdminDashboardView")
-                return # Termina a função aqui para não mostrar o menu inicialmente
+                return
 
-            # Rota padrão para os outros usuários: vai para o Menu Principal
             self.show_frame("MainMenuView")
 
         elif status == "pending":
             self.show_frame("PendingApprovalView")
-        else: # 'unregistered' ou outro status
+        else:
             self.frames["RequestAccessView"].on_show()
             self.show_frame("RequestAccessView")
 
     def perform_logout(self):
-        """Realiza o logout do usuário."""
         self.auth_service.logout()
         self.credentials = None
         self.user_email = None
@@ -175,7 +155,6 @@ class App(ctk.CTk):
         self.frames["LoginView"].set_default_state()
 
     def submit_access_request(self, full_name, username, main_group, sub_group, company_name=None):
-        """Envia uma solicitação de acesso para um novo usuário."""
         if not all([full_name, username, main_group]):
             messagebox.showwarning("Campos Obrigatórios", "Por favor, preencha todos os campos.")
             return
@@ -184,30 +163,47 @@ class App(ctk.CTk):
         if success:
             self.show_frame("PendingApprovalView")
     
-    # --- Métodos de delegação para os serviços ---
+    def get_all_occurrences(self, force_refresh=False):
+        if force_refresh or self.occurrences_cache is None:
+            self.occurrences_cache = self.sheets_service.get_all_occurrences()
+        return self.occurrences_cache
+
+    def get_all_users(self, force_refresh=False):
+        if force_refresh or self.users_cache is None:
+            self.users_cache = self.sheets_service.get_all_users()
+        return self.users_cache
+
     def get_pending_requests(self): return self.sheets_service.get_pending_requests()
     
     def update_user_access(self, email, new_status):
         self.sheets_service.update_user_status(email, new_status)
+        self.users_cache = None
         messagebox.showinfo("Sucesso", f"O acesso para {email} foi atualizado.")
         self.frames["AdminDashboardView"].load_access_requests()
-
-    def get_all_occurrences(self):
-        return self.sheets_service.get_all_occurrences()
 
     def save_occurrence_status_changes(self, changes):
         if not changes:
             messagebox.showinfo("Nenhuma Alteração", "Nenhum status foi alterado.")
             return
-        for occ_id, new_status in changes.items():
-            self.sheets_service.update_occurrence_status(occ_id, new_status)
-        messagebox.showinfo("Sucesso", f"{len(changes)} alterações foram salvas.")
-        self.frames["AdminDashboardView"].load_all_occurrences()
+        success, message = self.sheets_service.batch_update_occurrence_statuses(changes)
+        if success:
+            self.occurrences_cache = None
+            messagebox.showinfo("Sucesso", f"{len(changes)} alterações foram salvas.")
+            self.frames["AdminDashboardView"].load_all_occurrences(force_refresh=True)
+        else:
+            messagebox.showerror("Erro", message)
 
-    def get_all_users(self): return self.sheets_service.get_all_users()
-    
-    def update_user_profile(self, email, main_group, sub_group, company): 
-        self.sheets_service.update_user_profile(email, main_group, sub_group, company)
+    def update_user_profile(self, changes: dict):
+        if not changes:
+            messagebox.showinfo("Nenhuma Alteração", "Nenhum perfil foi alterado.")
+            return
+        success, message = self.sheets_service.batch_update_user_profiles(changes)
+        if success:
+            self.users_cache = None
+            messagebox.showinfo("Sucesso", f"{len(changes)} perfis foram atualizados.")
+            self.frames["AdminDashboardView"].load_all_users(force_refresh=True)
+        else:
+            messagebox.showerror("Erro ao Salvar", message)
         
     def get_user_occurrences(self): 
         return self.sheets_service.get_occurrences_by_user(self.user_email)
@@ -215,6 +211,7 @@ class App(ctk.CTk):
     def get_current_user_profile(self):
         return self.sheets_service.check_user_status(self.user_email)
 
+    # --- CORREÇÃO AQUI: Assinatura da função alterada para não aceitar anexos ---
     def submit_simple_call_occurrence(self, form_data):
         view = self.frames["SimpleCallView"]
         view.set_submitting_state(True)
@@ -223,6 +220,7 @@ class App(ctk.CTk):
     def _submit_simple_call_thread(self, form_data):
         success, message = self.sheets_service.register_simple_call_occurrence(self.user_email, form_data)
         self.after(0, self._on_submission_finished, "SimpleCallView", success, message)
+    # --- FIM DA CORREÇÃO ---
 
     def submit_equipment_occurrence(self, data, attachment_paths=None):
         view = self.frames["EquipmentView"]
@@ -233,6 +231,7 @@ class App(ctk.CTk):
         success, message = self.sheets_service.register_equipment_occurrence(self.credentials, self.user_email, data, attachment_paths)
         self.after(0, self._on_submission_finished, "EquipmentView", success, message)
 
+    # --- CORREÇÃO AQUI: Assinatura da função alterada para não aceitar anexos ---
     def submit_full_occurrence(self, title):
         profile = self.get_current_user_profile()
         main_group = profile.get("main_group")
@@ -251,6 +250,7 @@ class App(ctk.CTk):
     def _submit_full_occurrence_thread(self, title, testes):
         success, message = self.sheets_service.register_full_occurrence(self.user_email, title, testes)
         self.after(0, self._on_submission_finished, "RegistrationView", success, message)
+    # --- FIM DA CORREÇÃO ---
 
     def _on_submission_finished(self, view_name, success, message):
         view = self.frames[view_name]
@@ -258,6 +258,7 @@ class App(ctk.CTk):
             view.set_submitting_state(False)
 
         if success:
+            self.occurrences_cache = None
             messagebox.showinfo("Sucesso", message)
             if hasattr(view, 'on_show'):
                  view.on_show()

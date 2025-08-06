@@ -70,7 +70,8 @@ class AdminDashboardView(ctk.CTkFrame):
 
     def load_all_occurrences(self):
         self.all_occurrences_frame.configure(label_text="Carregando ocorrências...")
-        threading.Thread(target=lambda: self.after(0, self._populate_all_occurrences, self.controller.get_all_occurrences()), daemon=True).start()
+        # --- OTIMIZAÇÃO: Usa o cache do controlador ---
+        threading.Thread(target=lambda: self.after(0, self._populate_all_occurrences, self.controller.get_all_occurrences(force_refresh=True)), daemon=True).start()
 
     def _populate_all_occurrences(self, all_occurrences_list):
         self.status_updaters.clear()
@@ -90,7 +91,7 @@ class AdminDashboardView(ctk.CTkFrame):
             
             info_frame = ctk.CTkFrame(card, fg_color="transparent")
             info_frame.grid(row=0, column=0, sticky="w", padx=10, pady=5)
-            title = item.get('Título da Ocorrência', item.get('Tipo de Equipamento', 'N/A'))
+            title = item.get('Título da Ocorrência', 'Ocorrência sem Título')
             ctk.CTkLabel(info_frame, text=f"ID: {item_id} - {title}", font=ctk.CTkFont(size=14, weight="bold"), anchor="w").pack(anchor="w")
             ctk.CTkLabel(info_frame, text=f"Registrado por: {item.get('Nome do Registrador', 'N/A')} em {item.get('Data de Registro', 'N/A')}", anchor="w", text_color="gray60").pack(anchor="w")
             
@@ -144,7 +145,7 @@ class AdminDashboardView(ctk.CTkFrame):
 
     def load_all_users(self):
         self.all_users_frame.configure(label_text="Carregando usuários...")
-        threading.Thread(target=lambda: self.after(0, self._populate_all_users, self.controller.get_all_users()), daemon=True).start()
+        threading.Thread(target=lambda: self.after(0, self._populate_all_users, self.controller.get_all_users(force_refresh=True)), daemon=True).start()
 
     def _populate_all_users(self, all_users_list):
         self.profile_updaters.clear()
@@ -180,7 +181,6 @@ class AdminDashboardView(ctk.CTkFrame):
             sub_group_combo.set(user.get('sub_group'))
             sub_group_combo.pack(side="left", padx=(0, 5))
 
-            # --- ALTERAÇÃO AQUI: Usa ComboBox em vez de Entry ---
             company_combo = ctk.CTkComboBox(controls_frame, values=[], width=180)
             company_combo.set(user.get('company', ''))
             
@@ -214,14 +214,6 @@ class AdminDashboardView(ctk.CTkFrame):
             
             original = self.original_profiles.get(email, {})
             if original.get('main_group') != new_main or original.get('sub_group') != new_sub or original.get('company') != new_comp:
-                changes[email] = {'main': new_main, 'sub': new_sub, 'comp': new_comp}
+                changes[email] = {'main_group': new_main, 'sub_group': new_sub, 'company': new_comp}
         
-        if not changes:
-            messagebox.showinfo("Nenhuma Alteração", "Nenhum perfil de usuário foi alterado.")
-            return
-            
-        for email, c in changes.items():
-            self.controller.update_user_profile(email, c['main'], c['sub'], c['comp'])
-        
-        messagebox.showinfo("Sucesso", f"{len(changes)} perfis de usuário foram atualizados com sucesso.")
-        self.load_all_users()
+        self.controller.update_user_profile(changes)
