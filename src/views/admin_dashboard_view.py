@@ -1,7 +1,7 @@
 # ==============================================================================
 # FICHEIRO: src/views/admin_dashboard_view.py
 # DESCRIÇÃO: Contém a classe de interface para o Dashboard de Gestão,
-#            usado por administradores para gerir o sistema. (VERSÃO ATUALIZADA)
+#            usado por administradores para gerir o sistema. (VERSÃO CORRIGIDA)
 # ==============================================================================
 
 import customtkinter as ctk
@@ -19,13 +19,11 @@ class AdminDashboardView(ctk.CTkFrame):
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        # Dicionários para guardar o estado original dos dados e os widgets de atualização
         self.original_statuses = {}
         self.status_updaters = {}
         self.original_profiles = {}
         self.profile_updaters = {}
         
-        # Listas de empresas e departamentos
         self.partner_companies = ["M2 TELECOMUNICAÇÕES", "MDA FIBRA", "DISK SISTEMA TELECOM", "GMN TELECOM", "67 INTERNET"]
         self.prefeitura_dept_list = ["SECRETARIA DE SAUDE", "SECRETARIA DE OBRAS", "DEPARTAMENTO DE TI", "GUARDA MUNICIPAL", "GABINETE DO PREFEITO", "OUTRO"]
 
@@ -34,12 +32,10 @@ class AdminDashboardView(ctk.CTkFrame):
         self.tabview = ctk.CTkTabview(self, command=self.on_tab_change)
         self.tabview.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
         
-        # Captura a frame de cada aba no momento da criação
         occurrences_tab = self.tabview.add("Ocorrências")
         access_tab = self.tabview.add("Gerenciar Acessos")
         users_tab = self.tabview.add("Gerenciar Usuários")
         
-        # Configuração do conteúdo de cada aba, passando a frame como argumento
         self.setup_occurrences_tab(occurrences_tab)
         self.setup_access_tab(access_tab)
         self.setup_users_tab(users_tab)
@@ -48,17 +44,14 @@ class AdminDashboardView(ctk.CTkFrame):
         back_button.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
 
     def on_show(self):
-        """Chamado sempre que a tela é exibida para carregar os dados da aba atual."""
         self.on_tab_change()
 
     def on_tab_change(self):
-        """Carrega os dados correspondentes à aba selecionada."""
         selected_tab = self.tabview.get()
-        if selected_tab == "Ocorrências": self.load_all_occurrences()
+        if selected_tab == "Ocorrências": self.load_all_occurrences(force_refresh=True)
         elif selected_tab == "Gerenciar Acessos": self.load_access_requests()
-        elif selected_tab == "Gerenciar Usuários": self.load_all_users()
+        elif selected_tab == "Gerenciar Usuários": self.load_all_users(force_refresh=True)
 
-    # --- ABA DE GESTÃO DE OCORRÊNCIAS ---
     def setup_occurrences_tab(self, tab):
         ctk.CTkLabel(tab, text="Visão Geral de Todas as Ocorrências").pack(pady=5)
         self.all_occurrences_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando...")
@@ -66,12 +59,12 @@ class AdminDashboardView(ctk.CTkFrame):
         button_frame = ctk.CTkFrame(tab, fg_color="transparent")
         button_frame.pack(fill="x", pady=5, padx=5)
         ctk.CTkButton(button_frame, text="Salvar Alterações de Status", command=self.save_status_changes).pack(side="left", padx=(0, 10), expand=True, fill="x")
-        ctk.CTkButton(button_frame, text="Atualizar Lista", command=self.load_all_occurrences).pack(side="left", expand=True, fill="x")
+        ctk.CTkButton(button_frame, text="Atualizar Lista", command=lambda: self.load_all_occurrences(force_refresh=True)).pack(side="left", expand=True, fill="x")
 
-    def load_all_occurrences(self):
+    # --- CORREÇÃO AQUI: A função agora aceita o argumento 'force_refresh' ---
+    def load_all_occurrences(self, force_refresh=False):
         self.all_occurrences_frame.configure(label_text="Carregando ocorrências...")
-        # --- OTIMIZAÇÃO: Usa o cache do controlador ---
-        threading.Thread(target=lambda: self.after(0, self._populate_all_occurrences, self.controller.get_all_occurrences(force_refresh=True)), daemon=True).start()
+        threading.Thread(target=lambda: self.after(0, self._populate_all_occurrences, self.controller.get_all_occurrences(force_refresh)), daemon=True).start()
 
     def _populate_all_occurrences(self, all_occurrences_list):
         self.status_updaters.clear()
@@ -107,7 +100,6 @@ class AdminDashboardView(ctk.CTkFrame):
         changes = {occ_id: combo.get() for occ_id, combo in self.status_updaters.items() if self.original_statuses.get(occ_id) != combo.get()}
         self.controller.save_occurrence_status_changes(changes)
 
-    # --- ABA DE GESTÃO DE ACESSOS ---
     def setup_access_tab(self, tab):
         ctk.CTkLabel(tab, text="Solicitações de Acesso Pendentes").pack(pady=5)
         self.pending_users_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando...")
@@ -133,7 +125,6 @@ class AdminDashboardView(ctk.CTkFrame):
             ctk.CTkButton(card, text="Rejeitar", command=partial(self.controller.update_user_access, user['email'], 'rejected'), fg_color="red").pack(side="right", padx=5, pady=5)
             ctk.CTkButton(card, text="Aprovar", command=partial(self.controller.update_user_access, user['email'], 'approved'), fg_color="green").pack(side="right", padx=5, pady=5)
 
-    # --- ABA DE GESTÃO DE USUÁRIOS ---
     def setup_users_tab(self, tab):
         ctk.CTkLabel(tab, text="Lista de Todos os Usuários").pack(pady=5)
         self.all_users_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando...")
@@ -141,11 +132,12 @@ class AdminDashboardView(ctk.CTkFrame):
         button_frame = ctk.CTkFrame(tab, fg_color="transparent")
         button_frame.pack(fill="x", pady=5, padx=5)
         ctk.CTkButton(button_frame, text="Salvar Alterações de Perfil", command=self.save_profile_changes).pack(side="left", padx=(0, 10), expand=True, fill="x")
-        ctk.CTkButton(button_frame, text="Atualizar Lista", command=self.load_all_users).pack(side="left", expand=True, fill="x")
+        ctk.CTkButton(button_frame, text="Atualizar Lista", command=lambda: self.load_all_users(force_refresh=True)).pack(side="left", expand=True, fill="x")
 
-    def load_all_users(self):
+    # --- CORREÇÃO AQUI: A função agora aceita o argumento 'force_refresh' ---
+    def load_all_users(self, force_refresh=False):
         self.all_users_frame.configure(label_text="Carregando usuários...")
-        threading.Thread(target=lambda: self.after(0, self._populate_all_users, self.controller.get_all_users(force_refresh=True)), daemon=True).start()
+        threading.Thread(target=lambda: self.after(0, self._populate_all_users, self.controller.get_all_users(force_refresh)), daemon=True).start()
 
     def _populate_all_users(self, all_users_list):
         self.profile_updaters.clear()
@@ -188,7 +180,6 @@ class AdminDashboardView(ctk.CTkFrame):
             self._on_main_group_change(email, user.get('main_group'))
 
     def _on_main_group_change(self, email, selected_group):
-        """Mostra e configura o ComboBox de empresa com base no grupo principal."""
         if self.profile_updaters.get(email, {}).get('company'):
             company_widget = self.profile_updaters[email]['company']
             

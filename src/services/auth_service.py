@@ -1,6 +1,7 @@
 # ==============================================================================
 # FICHEIRO: src/services/auth_service.py
 # DESCRIÇÃO: Lida com a autenticação de utilizadores (OAuth) e da conta de serviço.
+#            (COM TRATAMENTO DE ERRO DE SCOPE)
 # ==============================================================================
 
 import os
@@ -21,7 +22,6 @@ class AuthService:
         self.SCOPES_USER = ["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/drive"]
         self.SCOPES_SERVICE_ACCOUNT = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         
-        # Caminhos para os ficheiros de credenciais
         self.CLIENT_SECRET_FILE = self._resource_path("client_secrets.json")
         self.TOKEN_FILE = self._resource_path("token.json")
         self.SERVICE_ACCOUNT_FILE = self._resource_path("service_account.json")
@@ -29,11 +29,8 @@ class AuthService:
     def _resource_path(self, relative_path):
         """ Obtém o caminho absoluto para os recursos, funciona para dev e para executável. """
         try:
-            # PyInstaller cria uma pasta temporária e armazena o caminho em _MEIPASS
             base_path = sys._MEIPASS
         except Exception:
-            # Se não estiver num executável, usa o caminho do ficheiro
-            # (Assumindo que os ficheiros de credenciais estão na raiz do projeto)
             base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
         return os.path.join(base_path, relative_path)
 
@@ -43,16 +40,21 @@ class AuthService:
         if os.path.exists(self.TOKEN_FILE):
             try:
                 creds = Credentials.from_authorized_user_file(self.TOKEN_FILE, self.SCOPES_USER)
-                # Se as credenciais expiraram, tenta atualizá-las
                 if creds and creds.expired and creds.refresh_token:
                     creds.refresh(Request())
                     self.save_user_credentials(creds)
                 if creds and creds.valid:
                     return creds
-            except RefreshError:
-                # Se o token de atualização for inválido, faz logout
-                self.logout()
+            # --- CORREÇÃO AQUI: Tratamento do erro de "Scope has changed" ---
+            except RefreshError as e:
+                if 'Scope has changed' in str(e):
+                    messagebox.showwarning("Permissões Atualizadas", 
+                                           "As permissões da aplicação foram atualizadas. O seu acesso foi resetado. Por favor, faça o login novamente.")
+                    self.logout() # Apaga o token.json inválido
+                else:
+                    messagebox.showerror("Erro de Autenticação", f"Ocorreu um erro ao verificar sua sessão: {e}")
                 return None
+            # --- FIM DA CORREÇÃO ---
         return None
 
     def save_user_credentials(self, credentials):
@@ -64,7 +66,6 @@ class AuthService:
         """Inicia o fluxo de login OAuth2 para o utilizador."""
         try:
             flow = InstalledAppFlow.from_client_secrets_file(self.CLIENT_SECRET_FILE, self.SCOPES_USER)
-            # Abre o navegador para o utilizador autorizar a aplicação
             return flow.run_local_server(port=0)
         except Exception as e:
             print(f"Erro no fluxo de login do utilizador: {e}")
