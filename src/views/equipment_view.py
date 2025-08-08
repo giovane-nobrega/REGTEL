@@ -2,16 +2,17 @@
 # FICHEIRO: src/views/equipment_view.py
 # DESCRIÇÃO: Contém a classe de interface para o formulário de registo
 #            de ocorrências de suporte técnico de equipamento.
+#            (VERSÃO COM VALIDAÇÃO PROATIVA)
 # ==============================================================================
-
 import customtkinter as ctk
 from tkinter import messagebox, filedialog
 import os
+import re
 
 class EquipmentView(ctk.CTkFrame):
     """
     Tela para utilizadores da Prefeitura registarem problemas relacionados
-    com equipamentos físicos (telefones, ATAs, etc.).
+    com equipamentos físicos, com validação proativa.
     """
     def __init__(self, parent, controller):
         super().__init__(parent)
@@ -47,7 +48,7 @@ class EquipmentView(ctk.CTkFrame):
         ctk.CTkLabel(form_frame, text="Ramal:").grid(
             row=2, column=0, padx=10, pady=10, sticky="w")
         self.equip_ramal = ctk.CTkEntry(
-            form_frame, placeholder_text="Ex: 2001")
+            form_frame, placeholder_text="Apenas números, ex: 2001")
         self.equip_ramal.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
 
         ctk.CTkLabel(form_frame, text="Localização:").grid(
@@ -87,6 +88,49 @@ class EquipmentView(ctk.CTkFrame):
             button_frame, text="Registar Problema", command=self.submit, height=40)
         self.submit_button.grid(row=0, column=1, padx=(5, 0), sticky="ew")
 
+        # --- Configuração da Lógica de Validação ---
+        self.default_border_color = self.equip_model.cget("border_color")
+        self.equip_ramal.bind("<FocusOut>", lambda event: self._validate_numeric_field(self.equip_ramal))
+        self.equip_model.bind("<FocusOut>", lambda event: self._validate_required_field(self.equip_model))
+        self.equip_location.bind("<FocusOut>", lambda event: self._validate_required_field(self.equip_location))
+        self.equip_description.bind("<KeyRelease>", lambda event: self._validate_required_field(self.equip_description))
+        self.equip_type.configure(command=lambda choice: self._validate_required_combobox(self.equip_type))
+
+
+    def _validate_numeric_field(self, widget):
+        """Verifica se o conteúdo de um widget contém apenas números."""
+        content = widget.get()
+        if content and not content.isdigit():
+            widget.configure(border_color="red")
+            return False
+        else:
+            widget.configure(border_color=self.default_border_color)
+            return True
+
+    def _validate_required_field(self, widget):
+        """Valida se um campo de texto (ou Textbox) não está vazio."""
+        content = ""
+        if isinstance(widget, ctk.CTkTextbox):
+            content = widget.get("1.0", "end-1c")
+        else:
+            content = widget.get()
+
+        if not content.strip():
+            widget.configure(border_color="red")
+            return False
+        else:
+            widget.configure(border_color=self.default_border_color)
+            return True
+            
+    def _validate_required_combobox(self, widget):
+        """Valida se uma ComboBox tem um valor selecionado."""
+        if not widget.get():
+            widget.configure(border_color="red")
+            return False
+        else:
+            widget.configure(border_color=self.default_border_color)
+            return True
+
     def _select_files(self):
         """Abre uma janela para o utilizador selecionar ficheiros de imagem."""
         filepaths = filedialog.askopenfilenames(
@@ -101,18 +145,38 @@ class EquipmentView(ctk.CTkFrame):
             self.attachment_label.configure(text="Nenhum ficheiro selecionado.")
 
     def on_show(self):
-        """Limpa o formulário sempre que a tela é exibida."""
+        """Limpa o formulário e restaura o estado visual sempre que a tela é exibida."""
         self.equip_type.set("")
         self.equip_model.delete(0, "end")
         self.equip_ramal.delete(0, "end")
         self.equip_location.delete(0, "end")
         self.equip_description.delete("1.0", "end")
+        
         self.attachment_paths = []
         self.attachment_label.configure(text="Nenhum ficheiro selecionado.")
+        
+        # Restaura as cores das bordas
+        self.equip_type.configure(border_color=self.default_border_color)
+        self.equip_model.configure(border_color=self.default_border_color)
+        self.equip_ramal.configure(border_color=self.default_border_color)
+        self.equip_location.configure(border_color=self.default_border_color)
+        self.equip_description.configure(border_color=self.default_border_color)
+        
         self.set_submitting_state(False)
 
     def submit(self):
-        """Coleta os dados do formulário e os envia para o controlador."""
+        """Coleta os dados, valida todos os campos e os envia para o controlador."""
+        # Executa todas as validações novamente antes de submeter
+        is_type_valid = self._validate_required_combobox(self.equip_type)
+        is_model_valid = self._validate_required_field(self.equip_model)
+        is_ramal_valid = self._validate_numeric_field(self.equip_ramal)
+        is_location_valid = self._validate_required_field(self.equip_location)
+        is_desc_valid = self._validate_required_field(self.equip_description)
+        
+        if not all([is_type_valid, is_model_valid, is_ramal_valid, is_location_valid, is_desc_valid]):
+            messagebox.showwarning("Campos Inválidos", "Por favor, preencha todos os campos obrigatórios e corrija os destacados em vermelho.")
+            return
+
         data = {
             "tipo": self.equip_type.get().upper(),
             "modelo": self.equip_model.get().upper(),

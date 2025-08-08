@@ -1,7 +1,7 @@
 # ==============================================================================
 # FICHEIRO: src/services/auth_service.py
 # DESCRIÇÃO: Lida com a autenticação de utilizadores (OAuth) e da conta de serviço.
-#            (COM TRATAMENTO DE ERRO DE SCOPE)
+#            (COM TRATAMENTO DE ERRO DE SCOPE E NOVO ESCOPO DE SHEETS)
 # ==============================================================================
 
 import os
@@ -19,7 +19,9 @@ from google.oauth2 import service_account
 class AuthService:
     """Lida com a autenticação de utilizadores (OAuth) e da conta de serviço."""
     def __init__(self):
-        self.SCOPES_USER = ["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/drive"]
+        # Adicionado o escopo de Google Sheets para o utilizador, conforme a análise.
+        self.SCOPES_USER = ["openid", "https://www.googleapis.com/auth/userinfo.email", 
+                            "https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/spreadsheets"]
         self.SCOPES_SERVICE_ACCOUNT = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         
         self.CLIENT_SECRET_FILE = self._resource_path("client_secrets.json")
@@ -39,22 +41,27 @@ class AuthService:
         creds = None
         if os.path.exists(self.TOKEN_FILE):
             try:
+                # Carrega as credenciais com os SCOPES_USER atualizados
                 creds = Credentials.from_authorized_user_file(self.TOKEN_FILE, self.SCOPES_USER)
                 if creds and creds.expired and creds.refresh_token:
                     creds.refresh(Request())
                     self.save_user_credentials(creds)
                 if creds and creds.valid:
                     return creds
-            # --- CORREÇÃO AQUI: Tratamento do erro de "Scope has changed" ---
             except RefreshError as e:
-                if 'Scope has changed' in str(e):
+                # Tratamento de erro quando o scope muda ou o token é inválido
+                if 'Scope has changed' in str(e) or 'invalid_grant' in str(e):
                     messagebox.showwarning("Permissões Atualizadas", 
-                                           "As permissões da aplicação foram atualizadas. O seu acesso foi resetado. Por favor, faça o login novamente.")
+                                           "As permissões da aplicação foram atualizadas ou sua sessão expirou. Por favor, faça o login novamente.")
                     self.logout() # Apaga o token.json inválido
                 else:
                     messagebox.showerror("Erro de Autenticação", f"Ocorreu um erro ao verificar sua sessão: {e}")
                 return None
-            # --- FIM DA CORREÇÃO ---
+            except Exception as e:
+                # Captura outros erros inesperados durante o carregamento/refresh
+                messagebox.showerror("Erro de Credenciais", f"Ocorreu um erro ao carregar as credenciais: {e}")
+                self.logout() # Força o logout para um novo início
+                return None
         return None
 
     def save_user_credentials(self, credentials):
@@ -65,11 +72,12 @@ class AuthService:
     def run_login_flow(self):
         """Inicia o fluxo de login OAuth2 para o utilizador."""
         try:
+            # Garante que o fluxo OAuth utiliza os SCOPES_USER atualizados
             flow = InstalledAppFlow.from_client_secrets_file(self.CLIENT_SECRET_FILE, self.SCOPES_USER)
             return flow.run_local_server(port=0)
         except Exception as e:
             print(f"Erro no fluxo de login do utilizador: {e}")
-            messagebox.showerror("Erro de Login", f"Não foi possível iniciar o login. Verifique o ficheiro 'client_secrets.json'.\n\nDetalhes: {e}")
+            messagebox.showerror("Erro de Login", f"Não foi possível iniciar o login. Verifique o ficheiro 'client_secrets.json' e sua conexão com a internet.\n\nDetalhes: {e}")
             return None
 
     def logout(self):
@@ -106,3 +114,4 @@ class AuthService:
         except Exception as e:
             messagebox.showerror("Erro Crítico", f"Falha ao carregar credenciais da conta de serviço: {e}")
             return None
+
