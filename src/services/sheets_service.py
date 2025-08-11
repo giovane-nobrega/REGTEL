@@ -2,6 +2,7 @@
 # FICHEIRO: src/services/sheets_service.py
 # DESCRIÇÃO: Lida com todas as operações de leitura e escrita na planilha
 #            Google Sheets, otimizado com operações em lote.
+#            (VERSÃO COM NORMALIZAÇÃO ROBUSTA DE TÍTULOS DE OCORRÊNCIA)
 # ==============================================================================
 
 import gspread
@@ -40,7 +41,6 @@ class SheetsService:
             self._SERVICE_CREDENTIALS = self.auth_service.get_service_account_credentials()
             if not self._SERVICE_CREDENTIALS:
                 return
-
             try:
                 self._GC = gspread.service_account(filename=self.auth_service.SERVICE_ACCOUNT_FILE)
                 self._SPREADSHEET = self._GC.open_by_key(self.SPREADSHEET_ID)
@@ -82,7 +82,7 @@ class SheetsService:
                 file = drive_service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
                 drive_service.permissions().create(fileId=file.get('id'), body={'role': 'reader', 'type': 'anyone'}).execute()
                 uploaded_file_links.append(file.get('webViewLink'))
-            return True, uploaded_file_links
+            return True, f"Upload de {len(uploaded_file_links)} ficheiro(s) concluído."
         except Exception as e:
             return False, f"Ocorreu um erro durante o upload para o Google Drive: {e}"
 
@@ -113,7 +113,8 @@ class SheetsService:
             if occ_id in all_ids_map:
                 info = all_ids_map[occ_id]
                 sheet_name = info['sheet']
-                status_col = 6 if sheet_name == self.EQUIPMENT_SHEET else 7
+                # Assumindo que a coluna de status é a 7 para CALLS e SIMPLE_CALLS, e 6 para EQUIPMENT
+                status_col = 6 if sheet_name == self.EQUIPMENT_SHEET else 7 
                 updates_by_sheet[sheet_name].append(gspread.Cell(info['row'], status_col, value=new_status))
 
         try:
@@ -174,11 +175,45 @@ class SheetsService:
         equip_ws = self._get_worksheet(self.EQUIPMENT_SHEET)
         
         all_occurrences = []
-        if calls_ws: all_occurrences.extend([rec for rec in self._get_all_records_safe(calls_ws) if rec.get('ID')])
-        if simple_calls_ws: all_occurrences.extend([rec for rec in self._get_all_records_safe(simple_calls_ws) if rec.get('ID')])
+
+        if calls_ws:
+            calls_records = [rec for rec in self._get_all_records_safe(calls_ws) if rec.get('ID')]
+            for rec in calls_records:
+                # Tenta obter o título da coluna 'Título da Ocorrência'
+                title = rec.get('Título da Ocorrência')
+                # Se estiver vazio ou apenas espaços, tenta 'Título' (coluna mais genérica)
+                if not title or str(title).strip() == "":
+                    title = rec.get('Título') # Tentar chave alternativa
+                
+                # Se ainda estiver vazio, gera um título padrão
+                if not title or str(title).strip() == "":
+                    rec['Título da Ocorrência'] = f"Chamada Detalhada {rec.get('ID', 'N/A')}"
+                else:
+                    rec['Título da Ocorrência'] = str(title).strip() # Garante que não há espaços em branco
+            all_occurrences.extend(calls_records)
+
+        if simple_calls_ws:
+            simple_calls_records = [rec for rec in self._get_all_records_safe(simple_calls_ws) if rec.get('ID')]
+            for rec in simple_calls_records:
+                title = rec.get('Título da Ocorrência')
+                if not title or str(title).strip() == "":
+                    title = rec.get('Título')
+                if not title or str(title).strip() == "":
+                    rec['Título da Ocorrência'] = f"Chamada Simples de {rec.get('Origem', 'N/A')} para {rec.get('Destino', 'N/A')}"
+                else:
+                    rec['Título da Ocorrência'] = str(title).strip()
+            all_occurrences.extend(simple_calls_records)
+
         if equip_ws:
             equip_records = [rec for rec in self._get_all_records_safe(equip_ws) if rec.get('ID')]
-            for rec in equip_records: rec['Título da Ocorrência'] = rec.get('Tipo de Equipamento', f"EQUIPAMENTO {rec.get('ID')}")
+            for rec in equip_records:
+                title = rec.get('Título da Ocorrência')
+                if not title or str(title).strip() == "":
+                    title = rec.get('Título')
+                if not title or str(title).strip() == "":
+                    rec['Título da Ocorrência'] = rec.get('Tipo de Equipamento', f"Equipamento {rec.get('ID', 'N/A')}")
+                else:
+                    rec['Título da Ocorrência'] = str(title).strip()
             all_occurrences.extend(equip_records)
             
         return sorted(all_occurrences, key=lambda x: x.get('Data de Registro', ''), reverse=True)
@@ -214,7 +249,8 @@ class SheetsService:
         if not ws: return sorted(list(base_operators))
         try:
             records = [rec for rec in self._get_all_records_safe(ws) if rec.get('ID')]
-            sheet_operators = {rec[key] for rec in records for key in ['Operadora A', 'Operadora B'] if rec.get(key)}
+            # Usar .get() com um valor padrão para evitar KeyError se a coluna não existir
+            sheet_operators = {rec.get(key) for rec in records for key in ['Operadora A', 'Operadora B'] if rec.get(key)}
             base_operators.update(sheet_operators)
         except Exception as e:
             print(f"Erro ao ler operadoras da planilha: {e}")
@@ -225,11 +261,20 @@ class SheetsService:
         ws = self._get_worksheet(self.USERS_SHEET)
         if not ws: return False, "Não foi possível aceder à planilha."
         try:
-            if ws.find(email): return False, "Solicitação já existe para este e-mail."
-        except gspread.exceptions.CellNotFound: pass
+            # Verifica se o e-mail já existe na primeira coluna
+            if ws.find(email, in_column=1): 
+                return False, "Solicitação já existe para este e-mail."
+        except gspread.exceptions.CellNotFound: 
+            pass # Se não encontrar, significa que o e-mail não está registado, pode continuar
+        except Exception as e:
+            return False, f"Erro ao verificar e-mail: {e}"
+
         new_row = [email, full_name, username, main_group, sub_group, "pending", company_name or ""]
-        ws.append_row(new_row, value_input_option='USER_ENTERED')
-        return True, "Solicitação de acesso enviada com sucesso."
+        try:
+            ws.append_row(new_row, value_input_option='USER_ENTERED')
+            return True, "Solicitação de acesso enviada com sucesso."
+        except Exception as e:
+            return False, f"Ocorreu um erro ao enviar a solicitação: {e}"
 
     def get_pending_requests(self):
         self._connect()
@@ -249,6 +294,7 @@ class SheetsService:
 
     def get_occurrence_by_id(self, occurrence_id):
         self._connect()
+        # get_all_occurrences já normaliza os títulos, então podemos usá-lo aqui
         for occ in self.get_all_occurrences():
             if str(occ.get('ID')) == str(occurrence_id): return occ
         return None
@@ -277,8 +323,10 @@ class SheetsService:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             new_id = f"SCALL-{len(self._get_all_records_safe(ws)) + 1:04d}"
             user_profile = self.check_user_status(user_email)
+            # O título é construído aqui e será normalizado por get_all_occurrences
+            title_to_register = f"CHAMADA SIMPLES DE {data.get('origem')} PARA {data.get('destino')}"
             new_row = [
-                new_id, now, f"CHAMADA SIMPLES DE {data.get('origem')} PARA {data.get('destino')}",
+                new_id, now, title_to_register,
                 user_email, user_profile.get("name", "N/A"), user_profile.get("username", "N/A"), 
                 'REGISTRADO', data.get('origem'), data.get('destino'), data.get('descricao'),
                 user_profile.get("main_group", "N/A"), user_profile.get("company", "")
@@ -301,9 +349,11 @@ class SheetsService:
         new_id = f"EQUIP-{len(self._get_all_records_safe(ws)) + 1:04d}"
         user_profile = self.check_user_status(user_email)
         
+        # O título é construído aqui e será normalizado por get_all_occurrences
+        title_to_register = data.get('tipo', f"EQUIPAMENTO {new_id}") # Usar tipo como título
         new_row = [
             new_id, now, user_email, user_profile.get("name", "N/A"), user_profile.get("username", "N/A"),
-            'REGISTRADO', data.get('tipo'), data.get('modelo'), data.get('ramal'),
+            'REGISTRADO', title_to_register, data.get('modelo'), data.get('ramal'), # Coluna 7 agora é o modelo
             data.get('localizacao'), data.get('descricao'), attachment_links_json,
             user_profile.get("main_group", "N/A"), user_profile.get("company", "")
         ]
@@ -313,26 +363,3 @@ class SheetsService:
         except Exception as e:
             return False, f"Ocorreu um erro ao registrar a ocorrência de equipamento: {e}"
 
-    def register_full_occurrence(self, user_email, title, testes):
-        self._connect()
-        ws = self._get_worksheet(self.CALLS_SHEET)
-        if not ws: return False, "Falha ao aceder à planilha de chamadas."
-        
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        new_id = f"CALL-{len(self._get_all_records_safe(ws)) + 1:04d}"
-        user_profile = self.check_user_status(user_email)
-        op_a = testes[0]['op_a'] if testes else 'N/A'
-        op_b = testes[0]['op_b'] if testes else 'N/A'
-        description = testes[0]['obs'] if testes else ""
-        testes_json = json.dumps(testes)
-        
-        new_row = [
-            new_id, now, title, user_email, user_profile.get("name", "N/A"), user_profile.get("username", "N/A"),
-            'REGISTRADO', op_a, op_b, testes_json, description, "[]",
-            user_profile.get("main_group", "N/A"), user_profile.get("company", "")
-        ]
-        try:
-            ws.append_row(new_row, value_input_option='USER_ENTERED')
-            return True, "Ocorrência detalhada registrada com sucesso."
-        except Exception as e:
-            return False, f"Ocorreu um erro ao registrar a ocorrência detalhada: {e}"

@@ -1,7 +1,7 @@
 # ==============================================================================
 # FICHEIRO: src/views/autocomplete_widget.py
 # DESCRIÇÃO: Contém a classe para o widget de entrada de texto com
-#            funcionalidade de autocompletar sugestões.
+#            funcionalidade de autocompletar sugestões. (ATUALIZADA COM CORES)
 # ==============================================================================
 
 import customtkinter as ctk
@@ -54,13 +54,27 @@ class AutocompleteEntry(ctk.CTkEntry):
         if self._suggestion_listbox:
             self._suggestion_listbox.destroy()
 
+        # Obtém a cor de fundo do widget pai (App)
+        # Assumindo que o master (RegistrationView) tem um controller com BASE_COLOR
+        parent_frame = self.winfo_toplevel()
+        if hasattr(parent_frame, 'controller') and hasattr(parent_frame.controller, 'BASE_COLOR'):
+            listbox_bg = parent_frame.controller.BASE_COLOR
+            listbox_fg = parent_frame.controller.TEXT_COLOR
+            select_bg = parent_frame.controller.PRIMARY_COLOR
+        else:
+            # Fallback para cores padrão se não puder acessar o controller
+            listbox_bg = "#2B2B2B"
+            listbox_fg = "white"
+            select_bg = "#1F6AA5"
+
+
         # Cria uma nova Listbox do Tkinter
         self._suggestion_listbox = tk.Listbox(
             self.master,
-            background="#2B2B2B",
-            foreground="white",
-            selectbackground="#1F6AA5",
-            selectforeground="white",
+            background=listbox_bg,
+            foreground=listbox_fg,
+            selectbackground=select_bg,
+            selectforeground="white", # Sempre branco para contraste no item selecionado
             borderwidth=1,
             highlightthickness=0,
             relief="flat"
@@ -141,3 +155,4 @@ class AutocompleteEntry(ctk.CTkEntry):
         if self._suggestion_listbox:
             self._on_listbox_select()
             return "break"
+

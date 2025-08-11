@@ -1,6 +1,6 @@
 # ==============================================================================
 # FICHEIRO: src/app.py
-# DESCRIÇÃO: Controlador principal da aplicação. (VERSÃO FINAL CORRIGIDA)
+# DESCRIÇÃO: Controlador principal da aplicação. (VERSÃO FINAL CORRIGIDA E COM MENSAGENS APRIMORADAS)
 # ==============================================================================
 
 import customtkinter as ctk
@@ -19,6 +19,7 @@ from views.main_menu_view import MainMenuView
 from views.occurrence_detail_view import OccurrenceDetailView
 from views.registration_view import RegistrationView
 from views.simple_call_view import SimpleCallView
+from views.notification_popup import NotificationPopup # Importação do novo módulo de notificação
 
 
 class App(ctk.CTk):
@@ -27,8 +28,25 @@ class App(ctk.CTk):
         self.title("Plataforma de Registro de Ocorrências (Craft Quest)")
         self.geometry("900x750")
         self.minsize(800, 650)
-        ctk.set_appearance_mode("System")
-        ctk.set_default_color_theme("blue")
+        
+        # --- Configurações de Aparência Global ---
+        ctk.set_appearance_mode("Dark") # Definido para modo escuro como base
+        # Nota: CustomTkinter usa temas predefinidos ou ajustes diretos.
+        # Definiremos as cores mais específicas nos widgets individuais.
+        ctk.set_default_color_theme("blue") 
+        
+        # --- DEFINIÇÃO DAS CORES CUSTOMIZADAS (MOVIDO PARA CIMA) ---
+        self.PRIMARY_COLOR = "#00BFFF"  # Azul elétrico vibrante
+        self.ACCENT_COLOR = "#00CED1"   # Ciano claro
+        self.BASE_COLOR = "#0A0E1A"     # Cor de fundo base (azul escuro)
+        self.TEXT_COLOR = "#FFFFFF"     # Branco puro
+        self.DANGER_COLOR = "#D32F2F"   # Vermelho para ações perigosas/excluir
+        self.DANGER_HOVER_COLOR = "#B71C1C" # Vermelho mais escuro para hover
+        self.GRAY_BUTTON_COLOR = "gray50" # Cor para botões secundários/neutros
+        self.GRAY_HOVER_COLOR = "gray40"  # Hover para botões secundários
+
+        # Definir a cor de fundo para a janela principal da aplicação
+        self.configure(fg_color=self.BASE_COLOR)
 
         self.auth_service = AuthService()
         self.sheets_service = SheetsService(self.auth_service)
@@ -44,7 +62,7 @@ class App(ctk.CTk):
         self.occurrences_cache = None
         self.users_cache = None
 
-        container = ctk.CTkFrame(self)
+        container = ctk.CTkFrame(self, fg_color=self.BASE_COLOR) # Container principal com cor de fundo
         container.pack(fill="both", expand=True)
 
         self.frames = {}
@@ -56,6 +74,7 @@ class App(ctk.CTk):
 
         for F in view_classes:
             page_name = F.__name__
+            # Passar as cores para as views, se necessário, ou elas usarão as cores padrão do tema/widgets
             frame = F(parent=container, controller=self)
             self.frames[page_name] = frame
             frame.place(relwidth=1.0, relheight=1.0)
@@ -110,13 +129,13 @@ class App(ctk.CTk):
             self.credentials = creds
             self.after(0, self._fetch_user_profile)
         else:
-            self.after(0, lambda: messagebox.showerror("Falha no Login", "O processo de login foi cancelado ou falhou."))
+            self.after(0, lambda: messagebox.showerror("Falha no Login", "O processo de login foi cancelado ou falhou. Por favor, tente novamente."))
             self.after(0, self.frames["LoginView"].set_default_state)
 
     def _fetch_user_profile(self):
         self.user_email = self.auth_service.get_user_email(self.credentials)
         if "Erro" in self.user_email:
-            self.after(0, lambda: messagebox.showerror("Erro de Autenticação", "Não foi possível obter o seu e-mail."))
+            self.after(0, lambda: messagebox.showerror("Erro de Autenticação", "Não foi possível obter o seu e-mail. Por favor, tente novamente ou contacte o suporte."))
             self.after(0, self.perform_logout)
             return
         
@@ -155,13 +174,17 @@ class App(ctk.CTk):
         self.frames["LoginView"].set_default_state()
 
     def submit_access_request(self, full_name, username, main_group, sub_group, company_name=None):
-        if not all([full_name, username, main_group]):
-            messagebox.showwarning("Campos Obrigatórios", "Por favor, preencha todos os campos.")
-            return
+        # A validação dos campos obrigatórios e formato agora está mais robusta na própria vista
+        # Aqui, a validação principal será se o email já está em uso (feita no sheets_service)
         success, message = self.sheets_service.request_access(self.user_email, full_name, username, main_group, sub_group, company_name)
-        messagebox.showinfo("Solicitação", message)
         if success:
+            NotificationPopup(self, message="Solicitação enviada com sucesso! Aguarde aprovação.", type="success")
             self.show_frame("PendingApprovalView")
+        else:
+            if "já existe para este e-mail" in message:
+                messagebox.showerror("E-mail Já Registrado", "Este e-mail já está registado em nosso sistema. Por favor, utilize outro e-mail ou entre em contacto com o administrador para assistência.")
+            else:
+                messagebox.showerror("Erro ao Enviar Solicitação", f"Não foi possível enviar sua solicitação de acesso: {message}\nPor favor, verifique seus dados e tente novamente.")
     
     def get_all_occurrences(self, force_refresh=False):
         if force_refresh or self.occurrences_cache is None:
@@ -177,8 +200,11 @@ class App(ctk.CTk):
     
     def update_user_access(self, email, new_status):
         self.sheets_service.update_user_status(email, new_status)
-        self.users_cache = None
-        messagebox.showinfo("Sucesso", f"O acesso para {email} foi atualizado.")
+        self.users_cache = None # Limpa o cache de usuários para recarregar
+        if new_status == 'approved':
+            NotificationPopup(self, message=f"O acesso para {email} foi aprovado com sucesso.", type="success")
+        else:
+            NotificationPopup(self, message=f"O acesso para {email} foi rejeitado.", type="info") # Info para rejeitado, não sucesso
         self.frames["AdminDashboardView"].load_access_requests()
 
     def save_occurrence_status_changes(self, changes):
@@ -188,10 +214,10 @@ class App(ctk.CTk):
         success, message = self.sheets_service.batch_update_occurrence_statuses(changes)
         if success:
             self.occurrences_cache = None
-            messagebox.showinfo("Sucesso", f"{len(changes)} alterações foram salvas.")
+            NotificationPopup(self, message=f"Os status de {len(changes)} ocorrência(s) foram salvos com sucesso.", type="success")
             self.frames["AdminDashboardView"].load_all_occurrences(force_refresh=True)
         else:
-            messagebox.showerror("Erro", message)
+            messagebox.showerror("Erro", f"Ocorreu um erro ao salvar as alterações de status: {message}")
 
     def update_user_profile(self, changes: dict):
         if not changes:
@@ -200,10 +226,10 @@ class App(ctk.CTk):
         success, message = self.sheets_service.batch_update_user_profiles(changes)
         if success:
             self.users_cache = None
-            messagebox.showinfo("Sucesso", f"{len(changes)} perfis foram atualizados.")
+            NotificationPopup(self, message=f"{len(changes)} perfil(is) de usuário foram atualizados com sucesso.", type="success")
             self.frames["AdminDashboardView"].load_all_users(force_refresh=True)
         else:
-            messagebox.showerror("Erro ao Salvar", message)
+            messagebox.showerror("Erro ao Salvar", f"Ocorreu um erro ao atualizar os perfis: {message}")
         
     def get_user_occurrences(self): 
         return self.sheets_service.get_occurrences_by_user(self.user_email)
@@ -211,7 +237,6 @@ class App(ctk.CTk):
     def get_current_user_profile(self):
         return self.sheets_service.check_user_status(self.user_email)
 
-    # --- CORREÇÃO AQUI: Assinatura da função alterada para não aceitar anexos ---
     def submit_simple_call_occurrence(self, form_data):
         view = self.frames["SimpleCallView"]
         view.set_submitting_state(True)
@@ -220,7 +245,6 @@ class App(ctk.CTk):
     def _submit_simple_call_thread(self, form_data):
         success, message = self.sheets_service.register_simple_call_occurrence(self.user_email, form_data)
         self.after(0, self._on_submission_finished, "SimpleCallView", success, message)
-    # --- FIM DA CORREÇÃO ---
 
     def submit_equipment_occurrence(self, data, attachment_paths=None):
         view = self.frames["EquipmentView"]
@@ -231,7 +255,6 @@ class App(ctk.CTk):
         success, message = self.sheets_service.register_equipment_occurrence(self.credentials, self.user_email, data, attachment_paths)
         self.after(0, self._on_submission_finished, "EquipmentView", success, message)
 
-    # --- CORREÇÃO AQUI: Assinatura da função alterada para não aceitar anexos ---
     def submit_full_occurrence(self, title):
         profile = self.get_current_user_profile()
         main_group = profile.get("main_group")
@@ -250,7 +273,6 @@ class App(ctk.CTk):
     def _submit_full_occurrence_thread(self, title, testes):
         success, message = self.sheets_service.register_full_occurrence(self.user_email, title, testes)
         self.after(0, self._on_submission_finished, "RegistrationView", success, message)
-    # --- FIM DA CORREÇÃO ---
 
     def _on_submission_finished(self, view_name, success, message):
         view = self.frames[view_name]
@@ -259,9 +281,12 @@ class App(ctk.CTk):
 
         if success:
             self.occurrences_cache = None
-            messagebox.showinfo("Sucesso", message)
+            # Exibir notificação temporária para sucesso
+            NotificationPopup(self, message=message, type="success")
             if hasattr(view, 'on_show'):
                  view.on_show()
             self.show_frame("MainMenuView")
         else:
-            messagebox.showerror("Falha no Registro", message)
+            # Manter messagebox.showerror para erros que exigem interação
+            messagebox.showerror("Ocorreu um Erro", f"Não foi possível completar a operação: {message}\nPor favor, tente novamente.")
+

@@ -2,7 +2,7 @@
 # FICHEIRO: src/views/main_menu_view.py
 # DESCRIÇÃO: Contém a classe de interface para o menu principal da aplicação,
 #            que exibe botões de ação dinamicamente com base no perfil do
-#            utilizador.
+#            utilizador. (ATUALIZADA COM CORES E ÍCONES - CORREÇÃO DE PADX)
 # ==============================================================================
 
 import customtkinter as ctk
@@ -13,8 +13,11 @@ class MainMenuView(ctk.CTkFrame):
     utilizador logado.
     """
     def __init__(self, parent, controller):
-        super().__init__(parent)
+        super().__init__(parent) # Removido fg_color do super().__init__
         self.controller = controller
+
+        # Definir a cor de fundo após a inicialização do super
+        self.configure(fg_color=self.controller.BASE_COLOR)
 
         # --- Configuração da Responsividade com Grid ---
         self.grid_columnconfigure(0, weight=1)
@@ -22,23 +25,80 @@ class MainMenuView(ctk.CTkFrame):
         self.grid_rowconfigure(0, weight=1)
         self.grid_rowconfigure(10, weight=1)
 
-        self.title_label = ctk.CTkLabel(self, text="Menu Principal", font=ctk.CTkFont(size=28, weight="bold"))
+        self.title_label = ctk.CTkLabel(self, text="Menu Principal",
+                                        font=ctk.CTkFont(size=28, weight="bold"),
+                                        text_color=self.controller.TEXT_COLOR) # Cor do texto
         self.title_label.grid(row=1, column=0, pady=(0, 40))
         
-        # --- Definição de todos os botões possíveis ---
-        self.admin_button = ctk.CTkButton(self, text="Dashboard de Gestão", command=lambda: self.controller.show_frame("AdminDashboardView"), height=45, width=350, font=ctk.CTkFont(size=14), fg_color="#1F6AA5")
-        self.partner_button = ctk.CTkButton(self, text="Registrar Ocorrência de Chamada (Detalhado)", command=lambda: self.controller.show_frame("RegistrationView"), height=45, width=350, font=ctk.CTkFont(size=14))
-        self.prefeitura_call_button = ctk.CTkButton(self, text="Registrar Ocorrência de Chamada (Simplificado)", command=lambda: self.controller.show_frame("SimpleCallView"), height=45, width=350, font=ctk.CTkFont(size=14))
-        self.prefeitura_equip_button = ctk.CTkButton(self, text="Registrar Suporte Técnico de Equipamento", command=lambda: self.controller.show_frame("EquipmentView"), height=45, width=350, font=ctk.CTkFont(size=14))
-        
-        self.history_button = ctk.CTkButton(self, text="Ver Histórico de Ocorrências", command=lambda: self.controller.show_frame("HistoryView"), height=45, width=350, font=ctk.CTkFont(size=14))
-        
-        self.logout_button = ctk.CTkButton(self, text="Logout (Trocar de usuário)", command=self.controller.perform_logout, height=45, width=350, font=ctk.CTkFont(size=14), fg_color="#D32F2F", hover_color="#B71C1C")
+        # --- Definição de todos os botões possíveis com cores e ícones ---
+        # Ícones unicode sólidos e preenchidos
+        ICON_DASHBOARD = "📊"
+        ICON_CALL_DETAILED = "📞"
+        ICON_CALL_SIMPLE = "☎️"
+        ICON_EQUIPMENT = "⚙️"
+        ICON_HISTORY = "📚"
+        ICON_LOGOUT = "➡️" # Seta para fora
+        ICON_EXIT = "❌"
 
-        self.exit_button = ctk.CTkButton(self, text="Fechar Aplicação", command=self.controller.quit, height=45, width=350, font=ctk.CTkFont(size=14), fg_color="gray50", hover_color="gray40")
+        self.admin_button = ctk.CTkButton(self, text=f"{ICON_DASHBOARD} Dashboard de Gestão",
+                                          command=lambda: self.controller.show_frame("AdminDashboardView"),
+                                          height=45, width=350, font=ctk.CTkFont(size=14, weight="bold"),
+                                          fg_color=self.controller.PRIMARY_COLOR, # Cor de destaque
+                                          text_color=self.controller.TEXT_COLOR,
+                                          hover_color=self.controller.ACCENT_COLOR, # Cor de acento no hover
+                                          compound="left") # REMOVIDO: padx=10
+        
+        self.partner_button = ctk.CTkButton(self, text=f"{ICON_CALL_DETAILED} Registrar Ocorrência de Chamada (Detalhado)",
+                                            command=lambda: self.controller.show_frame("RegistrationView"),
+                                            height=45, width=350, font=ctk.CTkFont(size=14),
+                                            fg_color=self.controller.PRIMARY_COLOR,
+                                            text_color=self.controller.TEXT_COLOR,
+                                            hover_color=self.controller.ACCENT_COLOR,
+                                            compound="left") # REMOVIDO: padx=10
+        
+        self.prefeitura_call_button = ctk.CTkButton(self, text=f"{ICON_CALL_SIMPLE} Registrar Ocorrência de Chamada (Simplificado)",
+                                                    command=lambda: self.controller.show_frame("SimpleCallView"),
+                                                    height=45, width=350, font=ctk.CTkFont(size=14),
+                                                    fg_color=self.controller.PRIMARY_COLOR,
+                                                    text_color=self.controller.TEXT_COLOR,
+                                                    hover_color=self.controller.ACCENT_COLOR,
+                                                    compound="left") # REMOVIDO: padx=10
+        
+        self.prefeitura_equip_button = ctk.CTkButton(self, text=f"{ICON_EQUIPMENT} Registrar Suporte Técnico de Equipamento",
+                                                     command=lambda: self.controller.show_frame("EquipmentView"),
+                                                     height=45, width=350, font=ctk.CTkFont(size=14),
+                                                     fg_color=self.controller.PRIMARY_COLOR,
+                                                     text_color=self.controller.TEXT_COLOR,
+                                                     hover_color=self.controller.ACCENT_COLOR,
+                                                     compound="left") # REMOVIDO: padx=10
+        
+        self.history_button = ctk.CTkButton(self, text=f"{ICON_HISTORY} Ver Histórico de Ocorrências",
+                                            command=lambda: self.controller.show_frame("HistoryView"),
+                                            height=45, width=350, font=ctk.CTkFont(size=14),
+                                            fg_color=self.controller.PRIMARY_COLOR,
+                                            text_color=self.controller.TEXT_COLOR,
+                                            hover_color=self.controller.ACCENT_COLOR,
+                                            compound="left") # REMOVIDO: padx=10
+        
+        self.logout_button = ctk.CTkButton(self, text=f"{ICON_LOGOUT} Logout (Trocar de usuário)",
+                                           command=self.controller.perform_logout,
+                                           height=45, width=350, font=ctk.CTkFont(size=14),
+                                           fg_color=self.controller.DANGER_COLOR, # Cor de perigo
+                                           text_color=self.controller.TEXT_COLOR,
+                                           hover_color=self.controller.DANGER_HOVER_COLOR, # Hover de perigo
+                                           compound="left") # REMOVIDO: padx=10
+
+        self.exit_button = ctk.CTkButton(self, text=f"{ICON_EXIT} Fechar Aplicação",
+                                         command=self.controller.quit,
+                                         height=45, width=350, font=ctk.CTkFont(size=14),
+                                         fg_color=self.controller.GRAY_BUTTON_COLOR, # Cor cinza
+                                         text_color=self.controller.TEXT_COLOR,
+                                         hover_color=self.controller.GRAY_HOVER_COLOR, # Hover cinza
+                                         compound="left") # REMOVIDO: padx=10
         
         # Label para mostrar o e-mail do utilizador logado
-        self.status_label = ctk.CTkLabel(self, text="", font=ctk.CTkFont(size=12))
+        self.status_label = ctk.CTkLabel(self, text="", font=ctk.CTkFont(size=12),
+                                         text_color="gray70") # Texto levemente mais claro
         self.status_label.grid(row=11, column=0, padx=20, pady=10, sticky="ew")
 
     def update_user_info(self, email, user_profile):
@@ -95,3 +155,4 @@ class MainMenuView(ctk.CTkFrame):
         next_row += 1
         
         self.exit_button.grid(row=next_row, column=0, pady=8, padx=20)
+

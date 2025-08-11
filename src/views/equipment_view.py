@@ -2,7 +2,7 @@
 # FICHEIRO: src/views/equipment_view.py
 # DESCRIÇÃO: Contém a classe de interface para o formulário de registo
 #            de ocorrências de suporte técnico de equipamento.
-#            (VERSÃO COM VALIDAÇÃO PROATIVA)
+#            (VERSÃO COM VALIDAÇÃO PROATIVA E CORES)
 # ==============================================================================
 import customtkinter as ctk
 from tkinter import messagebox, filedialog
@@ -15,8 +15,12 @@ class EquipmentView(ctk.CTkFrame):
     com equipamentos físicos, com validação proativa.
     """
     def __init__(self, parent, controller):
-        super().__init__(parent)
+        super().__init__(parent) # Removido fg_color do super().__init__
         self.controller = controller
+
+        # Definir a cor de fundo após a inicialização do super
+        self.configure(fg_color=self.controller.BASE_COLOR)
+
         self.attachment_paths = []
 
         # --- Configuração da Responsividade ---
@@ -24,52 +28,68 @@ class EquipmentView(ctk.CTkFrame):
         self.grid_rowconfigure(1, weight=1) 
 
         ctk.CTkLabel(self, text="Registar Suporte Técnico de Equipamento",
-                     font=ctk.CTkFont(size=24, weight="bold")).grid(row=0, column=0, padx=20, pady=(10, 20), sticky="ew")
+                     font=ctk.CTkFont(size=24, weight="bold"),
+                     text_color=self.controller.TEXT_COLOR).grid(row=0, column=0, padx=20, pady=(10, 20), sticky="ew")
 
         # --- Frame Principal do Formulário ---
-        form_frame = ctk.CTkFrame(self)
+        form_frame = ctk.CTkFrame(self, fg_color="gray15") # Fundo do formulário
         form_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
         form_frame.grid_columnconfigure(1, weight=1)
         form_frame.grid_rowconfigure(4, weight=1) # Permite que a caixa de descrição expanda
 
         # --- Campos do Formulário ---
-        ctk.CTkLabel(form_frame, text="Tipo de Equipamento:").grid(
+        ctk.CTkLabel(form_frame, text="Tipo de Equipamento:", text_color=self.controller.TEXT_COLOR).grid(
             row=0, column=0, padx=10, pady=10, sticky="w")
         self.equip_type = ctk.CTkComboBox(form_frame, values=[
-                                          "Telefone IP", "ATA", "Softphone", "Fonte de Alimentação", "Outro"])
+                                          "Telefone IP", "ATA", "Softphone", "Fonte de Alimentação", "Outro"],
+                                          fg_color="gray20", text_color=self.controller.TEXT_COLOR,
+                                          border_color="gray40", button_color=self.controller.PRIMARY_COLOR,
+                                          button_hover_color=self.controller.ACCENT_COLOR)
         self.equip_type.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
 
-        ctk.CTkLabel(form_frame, text="Marca/Modelo:").grid(row=1,
+        ctk.CTkLabel(form_frame, text="Marca/Modelo:", text_color=self.controller.TEXT_COLOR).grid(row=1,
                                                             column=0, padx=10, pady=10, sticky="w")
         self.equip_model = ctk.CTkEntry(
-            form_frame, placeholder_text="Ex: Grandstream GXP1610")
+            form_frame, placeholder_text="Ex: Grandstream GXP1610",
+            fg_color="gray20", text_color=self.controller.TEXT_COLOR,
+            border_color="gray40")
         self.equip_model.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
 
-        ctk.CTkLabel(form_frame, text="Ramal:").grid(
+        ctk.CTkLabel(form_frame, text="Ramal:", text_color=self.controller.TEXT_COLOR).grid(
             row=2, column=0, padx=10, pady=10, sticky="w")
         self.equip_ramal = ctk.CTkEntry(
-            form_frame, placeholder_text="Apenas números, ex: 2001")
+            form_frame, placeholder_text="Apenas números, ex: 2001",
+            fg_color="gray20", text_color=self.controller.TEXT_COLOR,
+            border_color="gray40")
         self.equip_ramal.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
 
-        ctk.CTkLabel(form_frame, text="Localização:").grid(
+        ctk.CTkLabel(form_frame, text="Localização:", text_color=self.controller.TEXT_COLOR).grid(
             row=3, column=0, padx=10, pady=10, sticky="w")
         self.equip_location = ctk.CTkEntry(
-            form_frame, placeholder_text="Ex: Prédio A, Sala 101, Mesa 5")
+            form_frame, placeholder_text="Ex: Prédio A, Sala 101, Mesa 5",
+            fg_color="gray20", text_color=self.controller.TEXT_COLOR,
+            border_color="gray40")
         self.equip_location.grid(
             row=3, column=1, padx=10, pady=10, sticky="ew")
 
-        ctk.CTkLabel(form_frame, text="Descrição do Problema:").grid(
+        ctk.CTkLabel(form_frame, text="Descrição do Problema:", text_color=self.controller.TEXT_COLOR).grid(
             row=4, column=0, padx=10, pady=10, sticky="nw")
-        self.equip_description = ctk.CTkTextbox(form_frame, height=120)
+        self.equip_description = ctk.CTkTextbox(form_frame, height=120,
+                                                fg_color="gray20", text_color=self.controller.TEXT_COLOR,
+                                                border_color="gray40")
         self.equip_description.grid(
             row=4, column=1, padx=10, pady=10, sticky="nsew")
 
         # --- Secção de Anexos ---
-        attachment_frame = ctk.CTkFrame(self)
+        attachment_frame = ctk.CTkFrame(self, fg_color="gray15") # Fundo da seção de anexos
         attachment_frame.grid(row=2, column=0, padx=20, pady=5, sticky="ew")
-        ctk.CTkLabel(attachment_frame, text="Anexar Imagens (Opcional):", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(10,5), pady=10)
+        ctk.CTkLabel(attachment_frame, text="Anexar Imagens (Opcional):",
+                     font=ctk.CTkFont(weight="bold"),
+                     text_color=self.controller.TEXT_COLOR).pack(side="left", padx=(10,5), pady=10)
         
-        attach_button = ctk.CTkButton(attachment_frame, text="Selecionar Ficheiros...", command=self._select_files)
+        attach_button = ctk.CTkButton(attachment_frame, text="Selecionar Ficheiros...", command=self._select_files,
+                                      fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
+                                      hover_color=self.controller.ACCENT_COLOR)
         attach_button.pack(side="left", padx=5, pady=10)
 
         self.attachment_label = ctk.CTkLabel(attachment_frame, text="Nenhum ficheiro selecionado.", text_color="gray60")
@@ -81,11 +101,14 @@ class EquipmentView(ctk.CTkFrame):
         button_frame.grid_columnconfigure((0, 1), weight=1)
 
         self.back_button = ctk.CTkButton(button_frame, text="Voltar ao Menu", command=lambda: self.controller.show_frame(
-            "MainMenuView"), fg_color="gray50", hover_color="gray40")
+            "MainMenuView"), fg_color=self.controller.GRAY_BUTTON_COLOR,
+            text_color=self.controller.TEXT_COLOR, hover_color=self.controller.GRAY_HOVER_COLOR)
         self.back_button.grid(row=0, column=0, padx=(0, 5), sticky="ew")
 
         self.submit_button = ctk.CTkButton(
-            button_frame, text="Registar Problema", command=self.submit, height=40)
+            button_frame, text="Registar Problema", command=self.submit, height=40,
+            fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
+            hover_color=self.controller.ACCENT_COLOR)
         self.submit_button.grid(row=0, column=1, padx=(5, 0), sticky="ew")
 
         # --- Configuração da Lógica de Validação ---
@@ -193,3 +216,4 @@ class EquipmentView(ctk.CTkFrame):
         else:
             self.submit_button.configure(
                 state="normal", text="Registar Problema")
+

@@ -2,7 +2,7 @@
 # FICHEIRO: src/views/simple_call_view.py
 # DESCRIÇÃO: Contém a classe de interface para o formulário de registo
 #            simplificado de ocorrências de chamada, para a Prefeitura.
-#            (VERSÃO COM VALIDAÇÃO PROATIVA)
+#            (VERSÃO COM VALIDAÇÃO PROATIVA E CORES)
 # ==============================================================================
 import customtkinter as ctk
 from tkinter import messagebox
@@ -14,41 +14,51 @@ class SimpleCallView(ctk.CTkFrame):
     do grupo Prefeitura, com validação proativa.
     """
     def __init__(self, parent, controller):
-        super().__init__(parent)
+        super().__init__(parent) # Removido fg_color do super().__init__
         self.controller = controller
+
+        # Definir a cor de fundo após a inicialização do super
+        self.configure(fg_color=self.controller.BASE_COLOR)
 
         # --- Configuração da Responsividade ---
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(self, text="Registrar Ocorrência de Chamada (Simplificado)",
-                     font=ctk.CTkFont(size=24, weight="bold")).grid(row=0, column=0, padx=20, pady=(10, 20), sticky="ew")
+                     font=ctk.CTkFont(size=24, weight="bold"),
+                     text_color=self.controller.TEXT_COLOR).grid(row=0, column=0, padx=20, pady=(10, 20), sticky="ew")
 
         # --- Frame Principal do Formulário ---
-        form_frame = ctk.CTkFrame(self)
+        form_frame = ctk.CTkFrame(self, fg_color="gray15") # Fundo do formulário
         form_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
         
         form_frame.grid_columnconfigure(1, weight=1)
         form_frame.grid_rowconfigure(2, weight=1) # Linha da descrição expande
 
         # --- Campos do Formulário ---
-        ctk.CTkLabel(form_frame, text="Número de Origem:").grid(
+        ctk.CTkLabel(form_frame, text="Número de Origem:", text_color=self.controller.TEXT_COLOR).grid(
             row=0, column=0, padx=10, pady=10, sticky="w")
         self.entry_num_origem = ctk.CTkEntry(
-            form_frame, placeholder_text="Apenas 11 dígitos, ex: 67999991234")
+            form_frame, placeholder_text="Apenas 11 dígitos, ex: 67999991234",
+            fg_color="gray20", text_color=self.controller.TEXT_COLOR,
+            border_color="gray40")
         self.entry_num_origem.grid(
             row=0, column=1, padx=10, pady=10, sticky="ew")
 
-        ctk.CTkLabel(form_frame, text="Número de Destino:").grid(
+        ctk.CTkLabel(form_frame, text="Número de Destino:", text_color=self.controller.TEXT_COLOR).grid(
             row=1, column=0, padx=10, pady=10, sticky="w")
         self.entry_num_destino = ctk.CTkEntry(
-            form_frame, placeholder_text="Apenas 11 dígitos, ex: 6734215678")
+            form_frame, placeholder_text="Apenas 11 dígitos, ex: 6734215678",
+            fg_color="gray20", text_color=self.controller.TEXT_COLOR,
+            border_color="gray40")
         self.entry_num_destino.grid(
             row=1, column=1, padx=10, pady=10, sticky="ew")
 
-        ctk.CTkLabel(form_frame, text="Descrição do Problema:").grid(
+        ctk.CTkLabel(form_frame, text="Descrição do Problema:", text_color=self.controller.TEXT_COLOR).grid(
             row=2, column=0, padx=10, pady=10, sticky="nw")
-        self.description_textbox = ctk.CTkTextbox(form_frame, height=150)
+        self.description_textbox = ctk.CTkTextbox(form_frame, height=150,
+                                                fg_color="gray20", text_color=self.controller.TEXT_COLOR,
+                                                border_color="gray40")
         self.description_textbox.grid(
             row=2, column=1, padx=10, pady=10, sticky="nsew")
 
@@ -58,11 +68,14 @@ class SimpleCallView(ctk.CTkFrame):
         button_frame.grid_columnconfigure((0, 1), weight=1)
 
         self.back_button = ctk.CTkButton(button_frame, text="Voltar ao Menu", command=lambda: self.controller.show_frame(
-            "MainMenuView"), fg_color="gray50", hover_color="gray40")
+            "MainMenuView"), fg_color=self.controller.GRAY_BUTTON_COLOR,
+            text_color=self.controller.TEXT_COLOR, hover_color=self.controller.GRAY_HOVER_COLOR)
         self.back_button.grid(row=0, column=0, padx=(0, 5), sticky="ew")
 
         self.submit_button = ctk.CTkButton(
-            button_frame, text="Registrar Ocorrência", command=self.submit, height=40)
+            button_frame, text="Registrar Ocorrência", command=self.submit, height=40,
+            fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
+            hover_color=self.controller.ACCENT_COLOR)
         self.submit_button.grid(row=0, column=1, padx=(5, 0), sticky="ew")
 
         # --- Configuração da Lógica de Validação ---
@@ -141,3 +154,4 @@ class SimpleCallView(ctk.CTkFrame):
         else:
             self.submit_button.configure(
                 state="normal", text="Registrar Ocorrência")
+
