@@ -9,6 +9,7 @@ import customtkinter as ctk
 import threading
 from functools import partial
 import json
+from tkinter import messagebox
 from datetime import datetime
 import re # Importação adicionada para validação com regex
 
@@ -344,10 +345,12 @@ class HistoryView(ctk.CTkFrame):
             info_frame = ctk.CTkFrame(card_frame, fg_color="transparent")
             info_frame.grid(row=0, column=0, padx=10, pady=5, sticky="w")
             
-            # --- MODIFICAÇÃO AQUI: Tentar obter o título de diferentes chaves ---
+            # --- Lógica de obtenção do título para exibição no histórico ---
+            # Tenta obter o título da chave 'Título da Ocorrência' (espera-se que venha normalizado do sheets_service)
             title = item.get('Título da Ocorrência')
-            if not title or title.strip() == "": # Se 'Título da Ocorrência' não for encontrado ou estiver vazio
-                # Tentar um fallback mais inteligente baseado no tipo de ocorrência
+            
+            # Se o título não for encontrado ou estiver vazio, tenta gerar um fallback
+            if not title or str(title).strip() == "":
                 item_id_prefix = item_id.split('-')[0] if '-' in item_id else item_id
                 
                 if item_id_prefix == 'SCALL':
@@ -355,11 +358,10 @@ class HistoryView(ctk.CTkFrame):
                 elif item_id_prefix == 'EQUIP':
                     title = item.get('Tipo de Equipamento', f"Equipamento {item_id}")
                 elif item_id_prefix == 'CALL':
-                    # Para chamadas detalhadas, se o título estiver vazio, usar um padrão
                     title = f"Chamada Detalhada {item_id}"
                 else:
-                    title = item.get('Título', 'Ocorrência sem Título') # Fallback genérico final
-            # --- FIM DA MODIFICAÇÃO ---
+                    title = 'Ocorrência sem Título' # Fallback genérico final
+            # --- Fim da lógica de obtenção do título ---
 
             date_str = item.get('Data de Registro', 'N/A')
             status = item.get('Status', 'N/A')
@@ -367,7 +369,7 @@ class HistoryView(ctk.CTkFrame):
             # Obtenha a data de registro e formate-a
             formatted_date = 'N/A'
             if date_str != 'N/A':
-                # Converte a string do banco de dados (YYYY-MM-DD HH:MM:SS)
+                # Converte a string do banco de dados (YYYY-MM-DD HH:MM:%S)
                 try:
                     date_obj = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
                     # Formata o objeto datetime para 'DD-MM-AAAA' para exibição

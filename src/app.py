@@ -1,11 +1,13 @@
 # ==============================================================================
 # FICHEIRO: src/app.py
-# DESCRIÇÃO: Controlador principal da aplicação. (VERSÃO FINAL CORRIGIDA E COM MENSAGENS APRIMORADAS)
+# DESCRIÇÃO: Controlador principal da aplicação. (VERSÃO COM ÍCONE DA JANELA E POLIMENTO DE LOGIN)
 # ==============================================================================
 
 import customtkinter as ctk
 from tkinter import messagebox
 import threading
+import os
+import sys
 
 # Importações dos módulos de serviço e das views
 from services.auth_service import AuthService
@@ -19,40 +21,63 @@ from views.main_menu_view import MainMenuView
 from views.occurrence_detail_view import OccurrenceDetailView
 from views.registration_view import RegistrationView
 from views.simple_call_view import SimpleCallView
-from views.notification_popup import NotificationPopup # Importação do novo módulo de notificação
+from views.notification_popup import NotificationPopup
 
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Plataforma de Registro de Ocorrências (Craft Quest)")
+        self.title("Plataforma de Registro de Ocorrências (REGTEL)") # Nome do programa atualizado para REGTEL
         self.geometry("900x750")
         self.minsize(800, 650)
         
         # --- Configurações de Aparência Global ---
-        ctk.set_appearance_mode("Dark") # Definido para modo escuro como base
-        # Nota: CustomTkinter usa temas predefinidos ou ajustes diretos.
-        # Definiremos as cores mais específicas nos widgets individuais.
+        ctk.set_appearance_mode("Dark")
         ctk.set_default_color_theme("blue") 
         
-        # --- DEFINIÇÃO DAS CORES CUSTOMIZADAS (MOVIDO PARA CIMA) ---
-        self.PRIMARY_COLOR = "#00BFFF"  # Azul elétrico vibrante
-        self.ACCENT_COLOR = "#00CED1"   # Ciano claro
-        self.BASE_COLOR = "#0A0E1A"     # Cor de fundo base (azul escuro)
-        self.TEXT_COLOR = "#FFFFFF"     # Branco puro
-        self.DANGER_COLOR = "#D32F2F"   # Vermelho para ações perigosas/excluir
-        self.DANGER_HOVER_COLOR = "#B71C1C" # Vermelho mais escuro para hover
-        self.GRAY_BUTTON_COLOR = "gray50" # Cor para botões secundários/neutros
-        self.GRAY_HOVER_COLOR = "gray40"  # Hover para botões secundários
+        # --- DEFINIÇÃO DAS CORES CUSTOMIZADAS ---
+        self.PRIMARY_COLOR = "#00BFFF"
+        self.ACCENT_COLOR = "#00CED1"
+        self.BASE_COLOR = "#0A0E1A"
+        self.TEXT_COLOR = "#FFFFFF"
+        self.DANGER_COLOR = "#D32F2F"
+        self.DANGER_HOVER_COLOR = "#B71C1C"
+        self.GRAY_BUTTON_COLOR = "gray50"
+        self.GRAY_HOVER_COLOR = "gray40"
 
         # Definir a cor de fundo para a janela principal da aplicação
         self.configure(fg_color=self.BASE_COLOR)
+
+        # --- CONFIGURAÇÃO DO ÍCONE DA JANELA ---
+        # Caminho para o ficheiro do ícone.
+        # Para PyInstaller, sys._MEIPASS é o caminho para os recursos empacotados.
+        # Para desenvolvimento, é o diretório raiz do script.
+        if hasattr(sys, '_MEIPASS'):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) # Volta para a raiz do projeto
+
+        icon_path = os.path.join(base_path, 'icon.ico') # Assumindo que o ícone é 'icon.ico' na raiz
+        
+        try:
+            # Tenta definir o ícone. Use .ico para Windows, .png para outros sistemas ou se preferir.
+            # Para .png, pode ser necessário usar ImageTk do Pillow:
+            # from PIL import Image, ImageTk
+            # icon_image = ImageTk.PhotoImage(Image.open(icon_path))
+            # self.wm_iconphoto(True, icon_image)
+            self.iconbitmap(icon_path) 
+        except ctk.Error as e:
+            print(f"Aviso: Não foi possível carregar o ícone da janela em '{icon_path}'. Erro: {e}")
+            # Pode optar por não mostrar messagebox aqui para evitar interrupção no startup
+        except Exception as e:
+            print(f"Aviso: Ocorreu um erro inesperado ao definir o ícone da janela: {e}")
+
 
         self.auth_service = AuthService()
         self.sheets_service = SheetsService(self.auth_service)
 
         self.credentials = None
-        self.user_email = "Carregando..."
+        self.user_email = "Carregando..." # Valor inicial
         self.user_profile = {}
         self.detail_window = None
         self.testes_adicionados = []
@@ -62,7 +87,7 @@ class App(ctk.CTk):
         self.occurrences_cache = None
         self.users_cache = None
 
-        container = ctk.CTkFrame(self, fg_color=self.BASE_COLOR) # Container principal com cor de fundo
+        container = ctk.CTkFrame(self, fg_color=self.BASE_COLOR)
         container.pack(fill="both", expand=True)
 
         self.frames = {}
@@ -74,7 +99,6 @@ class App(ctk.CTk):
 
         for F in view_classes:
             page_name = F.__name__
-            # Passar as cores para as views, se necessário, ou elas usarão as cores padrão do tema/widgets
             frame = F(parent=container, controller=self)
             self.frames[page_name] = frame
             frame.place(relwidth=1.0, relheight=1.0)
@@ -98,6 +122,7 @@ class App(ctk.CTk):
             messagebox.showerror("Erro", "Não foi possível encontrar os detalhes da ocorrência.")
 
     def check_initial_login(self):
+        # Aprimoramento da mensagem para guiar o utilizador
         self.frames["LoginView"].set_loading_state("Verificando credenciais...")
         threading.Thread(target=self._check_initial_login_thread, daemon=True).start()
 
@@ -119,7 +144,8 @@ class App(ctk.CTk):
             self.after(0, self.frames["RegistrationView"].set_operator_suggestions, self.operator_list)
 
     def perform_login(self):
-        self.frames["LoginView"].set_loading_state("Aguarde... Abrindo o navegador")
+        # Mensagem de feedback melhorada para o utilizador
+        self.frames["LoginView"].set_loading_state("Aguarde... Uma janela do navegador foi aberta para autenticação. Por favor, complete o login e retorne ao aplicativo.")
         threading.Thread(target=self._run_login_flow_in_thread, daemon=True).start()
 
     def _run_login_flow_in_thread(self):
@@ -127,15 +153,26 @@ class App(ctk.CTk):
         if creds:
             self.auth_service.save_user_credentials(creds)
             self.credentials = creds
+            
+            # --- NOVO: LÓGICA PARA TRAZER A APLICAÇÃO PARA O PRIMEIRO PLANO ---
+            self.after(0, self.deiconify)   # Garante que a janela não está minimizada
+            self.after(0, self.lift)        # Traz a janela para a frente de outras
+            self.after(0, self.focus_force) # Força o foco para a janela
+            # ------------------------------------------------------------------
+            
+            # Chama o próximo passo na thread principal
             self.after(0, self._fetch_user_profile)
         else:
             self.after(0, lambda: messagebox.showerror("Falha no Login", "O processo de login foi cancelado ou falhou. Por favor, tente novamente."))
             self.after(0, self.frames["LoginView"].set_default_state)
 
     def _fetch_user_profile(self):
-        self.user_email = self.auth_service.get_user_email(self.credentials)
-        if "Erro" in self.user_email:
-            self.after(0, lambda: messagebox.showerror("Erro de Autenticação", "Não foi possível obter o seu e-mail. Por favor, tente novamente ou contacte o suporte."))
+        # Garante que self.user_email é sempre uma string
+        self.user_email = str(self.auth_service.get_user_email(self.credentials)) 
+        print(f"DEBUG (App): Email obtido do auth_service: '{self.user_email}'") # NOVO PRINT
+        
+        if "Erro" in self.user_email or not self.user_email.strip(): # Verifica se há erro ou se está vazio
+            self.after(0, lambda: messagebox.showerror("Erro de Autenticação", "Não foi possível obter o seu e-mail. Por favor, tente novamente ou contacte o o suporte."))
             self.after(0, self.perform_logout)
             return
         
@@ -162,23 +199,33 @@ class App(ctk.CTk):
         elif status == "pending":
             self.show_frame("PendingApprovalView")
         else:
-            self.frames["RequestAccessView"].on_show()
+            # Assegurar que RequestAccessView esteja no estado correto ao ser mostrada
+            self.frames["RequestAccessView"].on_show() 
             self.show_frame("RequestAccessView")
 
     def perform_logout(self):
         self.auth_service.logout()
         self.credentials = None
-        self.user_email = None
+        self.user_email = None # Define como None ao fazer logout
         self.user_profile = {}
         self.show_frame("LoginView")
         self.frames["LoginView"].set_default_state()
 
     def submit_access_request(self, full_name, username, main_group, sub_group, company_name=None):
-        # A validação dos campos obrigatórios e formato agora está mais robusta na própria vista
-        # Aqui, a validação principal será se o email já está em uso (feita no sheets_service)
+        # --- AQUI ESTÁ A VALIDAÇÃO ADICIONADA ---
+        print(f"DEBUG (App): User email before submitting access request: '{self.user_email}'") # Mantido para depuração
+        if not self.user_email or self.user_email.strip() == "" or "Erro" in self.user_email:
+            messagebox.showerror("Erro Crítico", "Não foi possível obter seu e-mail. Por favor, tente fazer login novamente.")
+            self.perform_logout() # Força o logout para iniciar o fluxo de login
+            return
+        # ----------------------------------------
+        
         success, message = self.sheets_service.request_access(self.user_email, full_name, username, main_group, sub_group, company_name)
         if success:
-            NotificationPopup(self, message="Solicitação enviada com sucesso! Aguarde aprovação.", type="success")
+            # Passar as cores explicitamente
+            NotificationPopup(self, message="Solicitação enviada com sucesso! Aguarde aprovação.", type="success",
+                              bg_color_success="green", text_color_success="white", # Exemplo de cores para sucesso
+                              bg_color_info="gray", text_color_info="white") # Exemplo de cores para info
             self.show_frame("PendingApprovalView")
         else:
             if "já existe para este e-mail" in message:
@@ -200,11 +247,17 @@ class App(ctk.CTk):
     
     def update_user_access(self, email, new_status):
         self.sheets_service.update_user_status(email, new_status)
-        self.users_cache = None # Limpa o cache de usuários para recarregar
+        self.users_cache = None
         if new_status == 'approved':
-            NotificationPopup(self, message=f"O acesso para {email} foi aprovado com sucesso.", type="success")
+            # Passar as cores explicitamente
+            NotificationPopup(self, message=f"O acesso para {email} foi aprovado com sucesso.", type="success",
+                              bg_color_success="green", text_color_success="white",
+                              bg_color_info="gray", text_color_info="white")
         else:
-            NotificationPopup(self, message=f"O acesso para {email} foi rejeitado.", type="info") # Info para rejeitado, não sucesso
+            # Passar as cores explicitamente
+            NotificationPopup(self, message=f"O acesso para {email} foi rejeitado.", type="info",
+                              bg_color_success="green", text_color_success="white",
+                              bg_color_info="gray", text_color_info="white")
         self.frames["AdminDashboardView"].load_access_requests()
 
     def save_occurrence_status_changes(self, changes):
@@ -214,7 +267,10 @@ class App(ctk.CTk):
         success, message = self.sheets_service.batch_update_occurrence_statuses(changes)
         if success:
             self.occurrences_cache = None
-            NotificationPopup(self, message=f"Os status de {len(changes)} ocorrência(s) foram salvos com sucesso.", type="success")
+            # Passar as cores explicitamente
+            NotificationPopup(self, message=f"Os status de {len(changes)} ocorrência(s) foram salvos com sucesso.", type="success",
+                              bg_color_success="green", text_color_success="white",
+                              bg_color_info="gray", text_color_info="white")
             self.frames["AdminDashboardView"].load_all_occurrences(force_refresh=True)
         else:
             messagebox.showerror("Erro", f"Ocorreu um erro ao salvar as alterações de status: {message}")
@@ -226,7 +282,10 @@ class App(ctk.CTk):
         success, message = self.sheets_service.batch_update_user_profiles(changes)
         if success:
             self.users_cache = None
-            NotificationPopup(self, message=f"{len(changes)} perfil(is) de usuário foram atualizados com sucesso.", type="success")
+            # Passar as cores explicitamente
+            NotificationPopup(self, message=f"{len(changes)} perfil(is) de usuário foram atualizados com sucesso.", type="success",
+                              bg_color_success="green", text_color_success="white",
+                              bg_color_info="gray", text_color_info="white")
             self.frames["AdminDashboardView"].load_all_users(force_refresh=True)
         else:
             messagebox.showerror("Erro ao Salvar", f"Ocorreu um erro ao atualizar os perfis: {message}")
@@ -281,12 +340,12 @@ class App(ctk.CTk):
 
         if success:
             self.occurrences_cache = None
-            # Exibir notificação temporária para sucesso
-            NotificationPopup(self, message=message, type="success")
+            # Passar as cores explicitamente
+            NotificationPopup(self, message=message, type="success",
+                              bg_color_success="green", text_color_success="white",
+                              bg_color_info="gray", text_color_info="white")
             if hasattr(view, 'on_show'):
                  view.on_show()
             self.show_frame("MainMenuView")
         else:
-            # Manter messagebox.showerror para erros que exigem interação
             messagebox.showerror("Ocorreu um Erro", f"Não foi possível completar a operação: {message}\nPor favor, tente novamente.")
-

@@ -1,12 +1,13 @@
 # ==============================================================================
 # FICHEiro: src/views/occurrence_detail_view.py
 # DESCRIÇÃO: Contém a classe de interface para a janela (Toplevel) que exibe
-#            os detalhes completos de uma ocorrência. (ATUALIZADA COM CORES)
+#            os detalhes completos de uma ocorrência. (VERSÃO CORRIGIDA PARA DUPLICAÇÃO DE CAMPOS)
 # ==============================================================================
 
 import customtkinter as ctk
 import json
 import webbrowser
+from datetime import datetime # Importação adicionada
 
 class OccurrenceDetailView(ctk.CTkToplevel):
     """
@@ -36,35 +37,63 @@ class OccurrenceDetailView(ctk.CTkToplevel):
 
         # --- Exibição dos Dados Gerais ---
         row_counter = 0
+        # Lista de chaves a serem ignoradas no loop de exibição geral
+        # Inclui 'Testes' e 'Anexos' (chaves originais) e suas possíveis normalizações em minúsculas
+        keys_to_ignore_list = ['Testes', 'Anexos', 'testes', 'anexos']
+        
+        # Para evitar duplicações vindas do _get_all_records_safe, 
+        # vamos criar um conjunto para rastrear as chaves já exibidas (case-insensitive)
+        shown_keys = set()
+
         for key, value in occurrence_data.items():
-            # Campos com tratamento especial são ignorados neste loop
-            if key in ['Testes', 'Anexos']:
+            # Ignorar se a chave (case-insensitive) estiver na lista de ignorados
+            if key.lower() in (k.lower() for k in keys_to_ignore_list):
                 continue
 
-            key_label = ctk.CTkLabel(scrollable_frame, text=f"{key}:",
-                                     font=ctk.CTkFont(weight="bold"),
+            # Ignorar chaves que já foram exibidas (evita duplicadas)
+            if key.lower() in shown_keys:
+                continue
+            
+            # Adiciona a chave (em minúsculas) ao conjunto de chaves já exibidas
+            shown_keys.add(key.lower())
+
+            display_key = key
+            display_value = value
+
+            # Formatação especial para algumas chaves
+            if key.lower() == 'data de registro': # Usa lower() para ser compatível com chaves normalizadas se necessário
+                try:
+                    date_obj = datetime.strptime(str(value), "%Y-%m-%d %H:%M:%S")
+                    display_value = date_obj.strftime("%d-%m-%Y %H:%M:%S")
+                except ValueError:
+                    pass
+            elif key.lower() == 'status': # Usa lower()
+                display_value = str(value).upper()
+
+            key_label = ctk.CTkLabel(scrollable_frame, text=f"{display_key}:", font=ctk.CTkFont(weight="bold"),
                                      text_color=self.controller.TEXT_COLOR)
             key_label.grid(row=row_counter, column=0, padx=10, pady=5, sticky="ne")
 
-            value_label = ctk.CTkLabel(scrollable_frame, text=value, wraplength=400, justify="left",
-                                       text_color="gray70") # Texto de valor um pouco mais claro
+            value_label = ctk.CTkLabel(scrollable_frame, text=display_value, wraplength=400, justify="left",
+                                       text_color="gray70")
             value_label.grid(row=row_counter, column=1, padx=10, pady=5, sticky="nw")
 
             row_counter += 1
 
         # --- Exibição dos Testes de Ligação ---
-        if 'Testes' in occurrence_data and occurrence_data['Testes']:
+        # Acessa a chave original 'Testes' ou a normalizada 'testes'
+        testes_data = occurrence_data.get('Testes') or occurrence_data.get('testes')
+        if testes_data:
             try:
                 # O campo 'Testes' é uma string JSON, então precisa ser convertido
-                testes = json.loads(occurrence_data['Testes'])
+                testes = json.loads(testes_data)
                 if testes:
-                    tests_header_label = ctk.CTkLabel(scrollable_frame, text="Testes de Ligação:",
-                                                      font=ctk.CTkFont(size=14, weight="bold"),
+                    tests_header_label = ctk.CTkLabel(scrollable_frame, text="Testes de Ligação:", font=ctk.CTkFont(size=14, weight="bold"),
                                                       text_color=self.controller.TEXT_COLOR)
                     tests_header_label.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=(15, 5), sticky="w")
                     row_counter += 1
 
-                    tests_container = ctk.CTkFrame(scrollable_frame, fg_color="gray20") # Fundo do container de testes
+                    tests_container = ctk.CTkFrame(scrollable_frame, fg_color="gray20")
                     tests_container.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 
                     for i, teste in enumerate(testes):
@@ -81,22 +110,22 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                         test_card.pack(fill="x", padx=10, pady=5)
                     row_counter += 1
             except (json.JSONDecodeError, TypeError):
-                # Ignora erros se o JSON for inválido
-                pass
+                pass # Ignora erros se o JSON for inválido
 
         # --- Exibição dos Anexos ---
-        if 'Anexos' in occurrence_data and occurrence_data['Anexos']:
+        # Acessa a chave original 'Anexos' ou a normalizada 'anexos'
+        anexos_data = occurrence_data.get('Anexos') or occurrence_data.get('anexos')
+        if anexos_data:
             try:
                 # O campo 'Anexos' também é uma string JSON
-                anexos = json.loads(occurrence_data['Anexos'])
+                anexos = json.loads(anexos_data)
                 if anexos:
-                    anexos_header_label = ctk.CTkLabel(scrollable_frame, text="Anexos:",
-                                                      font=ctk.CTkFont(size=14, weight="bold"),
+                    anexos_header_label = ctk.CTkLabel(scrollable_frame, text="Anexos:", font=ctk.CTkFont(size=14, weight="bold"),
                                                       text_color=self.controller.TEXT_COLOR)
                     anexos_header_label.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=(15, 5), sticky="w")
                     row_counter += 1
 
-                    anexos_container = ctk.CTkFrame(scrollable_frame, fg_color="gray20") # Fundo do container de anexos
+                    anexos_container = ctk.CTkFrame(scrollable_frame, fg_color="gray20")
                     anexos_container.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 
                     for i, link in enumerate(anexos):
@@ -105,17 +134,16 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                         link_label = ctk.CTkLabel(
                             anexos_container, 
                             text=f"Anexo {i+1}: Abrir no navegador",
-                            text_color=(self.controller.PRIMARY_COLOR, self.controller.ACCENT_COLOR), # Usar cores de destaque/acento
+                            text_color=(self.controller.PRIMARY_COLOR, self.controller.ACCENT_COLOR), 
                             cursor="hand2", 
                             font=link_font
                         )
                         link_label.pack(anchor="w", padx=10, pady=2)
                         # Associa o clique do mouse à função que abre o link
                         link_label.bind("<Button-1>", lambda e, url=link: webbrowser.open_new(url))
-
+                    row_counter += 1
             except (json.JSONDecodeError, TypeError):
-                # Ignora erros se o JSON for inválido
-                pass
+                pass # Ignora erros se o JSON for inválido
 
         # --- Botão de Fechar ---
         close_button = ctk.CTkButton(self, text="Fechar", command=self.destroy,
@@ -123,4 +151,3 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                                      text_color=self.controller.TEXT_COLOR,
                                      hover_color=self.controller.GRAY_HOVER_COLOR)
         close_button.pack(pady=10)
-

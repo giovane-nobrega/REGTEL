@@ -1,6 +1,7 @@
 # ==============================================================================
 # FICHEIRO: src/views/notification_popup.py
 # DESCRIÇÃO: Implementa um pop-up de notificação temporário e não-bloqueante.
+#            (VERSÃO CORRIGIDA PARA DEPENDÊNCIA DE CORES)
 # ==============================================================================
 
 import customtkinter as ctk
@@ -10,7 +11,11 @@ class NotificationPopup(ctk.CTkToplevel):
     Um pop-up de notificação temporário e não-bloqueante que desaparece após um tempo.
     Pode ser usado para mensagens de sucesso ou informação.
     """
-    def __init__(self, master, message, type="info", duration_ms=3000):
+    def __init__(self, master, message, type="info", duration_ms=3000, 
+                 bg_color_success="green", text_color_success="white",
+                 bg_color_warning="orange", text_color_warning="white",
+                 bg_color_error="red", text_color_error="white",
+                 bg_color_info="#0A0E1A", text_color_info="#FFFFFF"): # Cores padrão
         super().__init__(master)
         self.master = master
         self.overrideredirect(True) # Remove a borda da janela e os botões de fechar
@@ -18,24 +23,21 @@ class NotificationPopup(ctk.CTkToplevel):
         self.wm_attributes("-topmost", True) # Garante que a janela fique no topo
         self.wm_attributes("-alpha", 0.0) # Começa invisível para fade-in
 
-        # Acessar as cores do controller (App)
-        self.controller = master # Master é a instância de App
-
         # Definir a cor de fundo e do texto com base no tipo de notificação
-        bg_color = self.controller.BASE_COLOR # Cor padrão
-        text_color = self.controller.TEXT_COLOR
+        # Agora as cores são passadas como argumentos, eliminando a dependência do controller
+        bg_color = bg_color_info
+        text_color = text_color_info
 
         if type == "success":
-            bg_color = "green" # Ou uma cor de sucesso definida no controller
-            text_color = "white"
+            bg_color = bg_color_success
+            text_color = text_color_success
         elif type == "warning":
-            bg_color = "orange"
-            text_color = "white"
+            bg_color = bg_color_warning
+            text_color = text_color_warning
         elif type == "error":
-            bg_color = "red"
-            text_color = "white"
-        # Para "info", usa as cores padrão definidas acima
-
+            bg_color = bg_color_error
+            text_color = text_color_error
+        
         self.frame = ctk.CTkFrame(self, fg_color=bg_color, corner_radius=10)
         self.frame.pack(padx=10, pady=10, fill="both", expand=True)
 
@@ -61,9 +63,10 @@ class NotificationPopup(ctk.CTkToplevel):
 
     def fade_in(self):
         """Faz a notificação aparecer gradualmente."""
-        alpha = self.winfo_attributes("-alpha")
-        if alpha < 0.9: # Fade in até 0.9 de opacidade
-            alpha += 0.1
+        # Correção: Usar wm_attributes em vez de winfo_attributes
+        alpha = self.wm_attributes("-alpha")
+        if float(alpha) < 0.9: # Converter para float para comparação
+            alpha = float(alpha) + 0.1
             self.wm_attributes("-alpha", alpha)
             self.after(50, self.fade_in)
         else:
@@ -71,9 +74,10 @@ class NotificationPopup(ctk.CTkToplevel):
 
     def fade_out(self):
         """Faz a notificação desaparecer gradualmente."""
-        alpha = self.winfo_attributes("-alpha")
-        if alpha > 0:
-            alpha -= 0.1 # Reduz a transparência em 0.1
+        # Correção: Usar wm_attributes em vez de winfo_attributes
+        alpha = self.wm_attributes("-alpha")
+        if float(alpha) > 0: # Converter para float para comparação
+            alpha = float(alpha) - 0.1 # Reduz a transparência em 0.1
             self.wm_attributes("-alpha", alpha)
             self.after(50, self.fade_out) # Repete a cada 50ms
         else:
