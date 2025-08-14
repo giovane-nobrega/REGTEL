@@ -18,11 +18,12 @@ class SheetsService:
     """Lida com todas as operações de leitura e escrita na planilha Google Sheets."""
     def __init__(self, auth_service_instance):
         self.auth_service = auth_service_instance
-        self.SPREADSHEET_ID = "1ymzB0QiZiuTnLk9h3qfFnZgcxkTKJUeT-3rn4bYqtQA" 
+        self.SPREADSHEET_ID = "1ymzB0QiZiuTnLk9h3qfFnZgcxkTKJUeT-3rn4bYqtQA"
         self.USERS_SHEET = "users"
         self.CALLS_SHEET = "call_occurrences"
         self.SIMPLE_CALLS_SHEET = "simple_call_occurrences"
         self.EQUIPMENT_SHEET = "equipment_occurrences"
+        self.OCCURRENCE_COMMENTS_SHEET = "occurrence_comments" # Nova folha para comentários
 
         self.gspread_lock = threading.Lock()
         self._GC = None
@@ -37,7 +38,7 @@ class SheetsService:
         with self.gspread_lock:
             if self.is_connected:
                 return
-            
+
             self._SERVICE_CREDENTIALS = self.auth_service.get_service_account_credentials()
             if not self._SERVICE_CREDENTIALS:
                 return
@@ -107,7 +108,7 @@ class SheetsService:
     # ==============================================================================
     # --- MÉTODOS DE ATUALIZAÇÃO EM LOTE (OTIMIZADOS) ---
     # ==============================================================================
-    
+
     def batch_update_occurrence_statuses(self, changes: dict):
         """Atualiza múltiplos status de ocorrências de uma só vez."""
         self._connect()
@@ -133,7 +134,7 @@ class SheetsService:
             if occ_id in all_ids_map:
                 info = all_ids_map[occ_id]
                 sheet_name = info['sheet']
-                status_col = 6 if sheet_name == self.EQUIPMENT_SHEET else 7 
+                status_col = 6 if sheet_name == self.EQUIPMENT_SHEET else 7
                 updates_by_sheet[sheet_name].append(gspread.Cell(info['row'], status_col, value=new_status))
 
         try:
@@ -153,7 +154,7 @@ class SheetsService:
         if not ws: return False, "Falha na conexão com a aba de utilizadores."
 
         emails_in_sheet = ws.col_values(1) # Obtém e-mails brutos da coluna 1
-        all_users_map = {emails_in_sheet[i].strip().lower(): {'row': i + 1} 
+        all_users_map = {emails_in_sheet[i].strip().lower(): {'row': i + 1}
                          for i in range(1, len(emails_in_sheet)) if emails_in_sheet[i].strip()}
 
         cells_to_update = []
@@ -197,12 +198,12 @@ class SheetsService:
         calls_ws = self._get_worksheet(self.CALLS_SHEET)
         simple_calls_ws = self._get_worksheet(self.SIMPLE_CALLS_SHEET)
         equip_ws = self._get_worksheet(self.EQUIPMENT_SHEET)
-        
+
         all_occurrences = []
 
         # Chaves comuns para o título, em ordem de preferência (usar chaves normalizadas)
         possible_title_keys = ['título da ocorrência', 'título', 'title']
-        
+
         def get_final_title(record, record_type):
             """
             Tenta encontrar um título válido no registo (usando chaves normalizadas)
@@ -213,7 +214,7 @@ class SheetsService:
                 value = record.get(key)
                 if value is not None and str(value).strip() != "":
                     return str(value).strip()
-            
+
             # Se nenhum título do usuário for encontrado, gera um padrão baseado no tipo de ocorrência
             record_id = record.get('id', 'N/A') # ID também virá normalizado
             if record_type == "call": # Chamadas detalhadas
@@ -222,7 +223,7 @@ class SheetsService:
                 return f"Chamada Simples de {record.get('origem', 'N/A')} para {record.get('destino', 'N/A')}"
             elif record_type == "equipment": # Ocorrências de equipamento
                 return record.get('tipo de equipamento', f"Equipamento {record_id}")
-            
+
             return f"Ocorrência {record_id}" # Fallback final
 
 
@@ -246,7 +247,7 @@ class SheetsService:
                 if rec.get('id'):
                     rec['Título da Ocorrência'] = get_final_title(rec, "equipment")
                     all_occurrences.append(rec)
-            
+
         # Retorna os registros com chaves originais e normalizadas, e 'Título da Ocorrência' preenchido
         return sorted(all_occurrences, key=lambda x: x.get('Data de Registro', ''), reverse=True)
 
@@ -257,18 +258,44 @@ class SheetsService:
         if not user_profile or user_profile.get('status') != 'approved': return []
 
         main_group = user_profile.get("main_group") # Acessa a chave original 'main_group'
+        sub_group = user_profile.get("sub_group") # Obter o sub_group
         user_company = user_profile.get("company", "").strip().upper() # Acessa a chave original 'company'
 
         all_occurrences = self.get_all_occurrences() # Usa o método que já normaliza chaves e títulos
-        
-        if main_group == '67_TELECOM': return all_occurrences
+
+        if main_group == '67_TELECOM':
+            if sub_group == "SUPER_ADMIN" or sub_group == "ADMIN" or sub_group == "MANAGER" or sub_group == "USER":
+                # Estes perfis da 67 Telecom (exceto o novo) veem tudo
+                return all_occurrences
+            elif sub_group == "67_INTERNET_USER":
+                # Novo subgrupo: filtra por Registrador Company "67 INTERNET"
+                if not user_company or user_company != "67 INTERNET": # Garantir que o perfil está correto
+                    return [] # Se não for 67 Internet, não deve ver nada
+                return [occ for occ in all_occurrences if occ.get('Registrador Company', '').strip().upper() == user_company]
 
         if main_group in ['PARTNER', 'PREFEITURA']:
-            if not user_company: return []
+            if not user_company:
+                return []
             # Compara usando a chave original 'Registrador Company'
             return [occ for occ in all_occurrences if occ.get('Registrador Company', '').strip().upper() == user_company]
 
         return []
+
+    def get_active_occurrences_for_admin_dashboard(self):
+        """
+        Obtém todas as ocorrências e filtra aquelas com status 'RESOLVIDO' ou 'CANCELADO'.
+        Destinado ao dashboard de gestão.
+        """
+        all_occurrences = self.get_all_occurrences() # Usa o método que já normaliza e pega tudo
+
+        active_statuses = ["REGISTRADO", "EM ANÁLISE", "AGUARDANDO TERCEIROS", "PARCIALMENTE RESOLVIDO"] # Inclui o novo status
+
+        # Filtra as ocorrências que não estão em status de finalização
+        filtered_occurrences = [
+            occ for occ in all_occurrences
+            if occ.get('Status', '').upper() in active_statuses
+        ]
+        return filtered_occurrences
 
     def get_all_users(self):
         self._connect()
@@ -296,7 +323,7 @@ class SheetsService:
         except Exception as e:
             print(f"Erro ao ler operadoras da planilha: {e}")
         return sorted(list(base_operators))
-    
+
     def request_access(self, email, full_name, username, main_group, sub_group, company_name=None):
         self._connect()
         ws = self._get_worksheet(self.USERS_SHEET)
@@ -304,7 +331,7 @@ class SheetsService:
         try:
             all_users_records = self._get_all_records_safe(ws) # Obtém registos com chaves originais e normalizadas
             normalized_emails_in_sheet = [str(rec.get('email', '')).strip().lower() for rec in all_users_records]
-            
+
             if email.strip().lower() in normalized_emails_in_sheet:
                 return False, "Solicitação já existe para este e-mail."
         except Exception as e:
@@ -333,7 +360,7 @@ class SheetsService:
         if not ws: return []
         all_users = self._get_all_records_safe(ws) # Usa _get_all_records_safe que retorna chaves originais e normalizadas
         return [user for user in all_users if user.get("status") and str(user.get("status")).strip().lower() == "pending"]
-        
+
     def update_user_status(self, email, new_status):
         self._connect()
         ws = self._get_worksheet(self.USERS_SHEET)
@@ -351,7 +378,7 @@ class SheetsService:
         # get_all_occurrences já normaliza os títulos e chaves, então podemos usá-lo aqui
         for occ in self.get_all_occurrences():
             # Compara usando a chave normalizada 'id'
-            if str(occ.get('id')).strip().lower() == str(occurrence_id).strip().lower(): 
+            if str(occ.get('id')).strip().lower() == str(occurrence_id).strip().lower():
                 return occ # Retorna o dicionário com chaves originais e normalizadas
         return None
 
@@ -383,7 +410,7 @@ class SheetsService:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             current_records = self._get_all_records_safe(ws)
             new_id = f"SCALL-{len([rec for rec in current_records if rec.get('id')]) + 1:04d}" # Usa 'id' normalizado
-            
+
             user_profile = self.check_user_status(user_email)
             title_to_register = f"CHAMADA SIMPLES DE {data.get('origem', 'N/A')} PARA {data.get('destino', 'N/A')}"
             new_row = [
@@ -401,18 +428,18 @@ class SheetsService:
         self._connect()
         ws = self._get_worksheet(self.EQUIPMENT_SHEET)
         if not ws: return False, "Falha ao aceder à planilha de equipamentos."
-        
+
         upload_success, result = self._upload_files_to_drive(user_credentials, attachment_paths)
         if not upload_success: return False, result
-        
+
         attachment_links_json = json.dumps(result)
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+
         current_records = self._get_all_records_safe(ws)
         new_id = f"EQUIP-{len([rec for rec in current_records if rec.get('id')]) + 1:04d}" # Usa 'id' normalizado
 
         user_profile = self.check_user_status(user_email)
-        
+
         title_to_register = data.get('tipo', f"EQUIPAMENTO {new_id}") # Usar tipo como título
         new_row = [
             new_id, now, user_email, user_profile.get("Nome Completo", "N/A"), user_profile.get("username", "N/A"), # Usar chaves originais para guardar
@@ -430,9 +457,9 @@ class SheetsService:
         self._connect()
         ws = self._get_worksheet(self.CALLS_SHEET)
         if not ws: return False, "Falha ao aceder à planilha de chamadas."
-        
+
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+
         current_records = self._get_all_records_safe(ws)
         new_id = f"CALL-{len([rec for rec in current_records if rec.get('id')]) + 1:04d}" # Usa 'id' normalizado
 
@@ -441,7 +468,7 @@ class SheetsService:
         op_b = testes[0]['op_b'] if testes else 'N/A'
         description = testes[0]['obs'] if testes else ""
         testes_json = json.dumps(testes)
-        
+
         new_row = [
             new_id, now, title, user_email, user_profile.get("Nome Completo", "N/A"), user_profile.get("username", "N/A"), # Usar chaves originais para guardar
             'REGISTRADO', op_a, op_b, testes_json, description, "[]",
@@ -452,3 +479,43 @@ class SheetsService:
             return True, "Ocorrência detalhada registrada com sucesso."
         except Exception as e:
             return False, f"Ocorreu um erro ao registrar a ocorrência detalhada: {e}"
+
+    def add_occurrence_comment(self, occurrence_id, user_email, user_name, comment_text):
+        self._connect()
+        ws = self._get_worksheet(self.OCCURRENCE_COMMENTS_SHEET)
+        if not ws: return False, "Falha ao aceder à planilha de comentários."
+
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        comment_id = f"COM-{datetime.now().strftime('%Y%m%d%H%M%S%f')}" # ID único baseado em timestamp
+
+        new_row = [
+            occurrence_id,
+            comment_id,
+            user_email,
+            user_name,
+            now,
+            comment_text
+        ]
+        try:
+            ws.append_row(new_row, value_input_option='USER_ENTERED')
+            return True, "Comentário adicionado com sucesso."
+        except Exception as e:
+            return False, f"Ocorreu um erro ao adicionar o comentário: {e}"
+
+    def get_occurrence_comments(self, occurrence_id):
+        self._connect()
+        ws = self._get_worksheet(self.OCCURRENCE_COMMENTS_SHEET)
+        if not ws: return []
+
+        try:
+            all_comments = self._get_all_records_safe(ws)
+            # Filtra por ID da ocorrência e ordena por data
+            filtered_comments = [
+                comment for comment in all_comments
+                if comment.get('id_ocorrencia') and str(comment['id_ocorrencia']).strip().lower() == str(occurrence_id).strip().lower()
+            ]
+            # Ordena por 'Data_Comentario' (a chave original)
+            return sorted(filtered_comments, key=lambda x: x.get('Data_Comentario', ''), reverse=True)
+        except Exception as e:
+            print(f"Erro ao obter comentários da ocorrência {occurrence_id}: {e}")
+            return []

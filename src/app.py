@@ -30,11 +30,11 @@ class App(ctk.CTk):
         self.title("Plataforma de Registro de Ocorrências (REGTEL)") # Nome do programa atualizado para REGTEL
         self.geometry("900x750")
         self.minsize(800, 650)
-        
+
         # --- Configurações de Aparência Global ---
         ctk.set_appearance_mode("Dark")
-        ctk.set_default_color_theme("blue") 
-        
+        ctk.set_default_color_theme("blue")
+
         # --- DEFINIÇÃO DAS CORES CUSTOMIZADAS ---
         self.PRIMARY_COLOR = "#00BFFF"
         self.ACCENT_COLOR = "#00CED1"
@@ -58,14 +58,14 @@ class App(ctk.CTk):
             base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) # Volta para a raiz do projeto
 
         icon_path = os.path.join(base_path, 'icon.ico') # Assumindo que o ícone é 'icon.ico' na raiz
-        
+
         try:
             # Tenta definir o ícone. Use .ico para Windows, .png para outros sistemas ou se preferir.
             # Para .png, pode ser necessário usar ImageTk do Pillow:
             # from PIL import Image, ImageTk
             # icon_image = ImageTk.PhotoImage(Image.open(icon_path))
             # self.wm_iconphoto(True, icon_image)
-            self.iconbitmap(icon_path) 
+            self.iconbitmap(icon_path)
         except ctk.Error as e:
             print(f"Aviso: Não foi possível carregar o ícone da janela em '{icon_path}'. Erro: {e}")
             # Pode optar por não mostrar messagebox aqui para evitar interrupção no startup
@@ -83,7 +83,7 @@ class App(ctk.CTk):
         self.testes_adicionados = []
         self.editing_index = None
         self.operator_list = []
-        
+
         self.occurrences_cache = None
         self.users_cache = None
 
@@ -102,7 +102,7 @@ class App(ctk.CTk):
             frame = F(parent=container, controller=self)
             self.frames[page_name] = frame
             frame.place(relwidth=1.0, relheight=1.0)
-        
+
         self.check_initial_login()
 
     def show_frame(self, page_name):
@@ -134,7 +134,7 @@ class App(ctk.CTk):
         else:
             self.after(0, self.frames["LoginView"].set_default_state)
             self.after(0, self.show_frame, "LoginView")
-            
+
     def load_secondary_data(self):
         threading.Thread(target=self._load_operators_thread, daemon=True).start()
 
@@ -153,13 +153,13 @@ class App(ctk.CTk):
         if creds:
             self.auth_service.save_user_credentials(creds)
             self.credentials = creds
-            
+
             # --- NOVO: LÓGICA PARA TRAZER A APLICAÇÃO PARA O PRIMEIRO PLANO ---
             self.after(0, self.deiconify)   # Garante que a janela não está minimizada
             self.after(0, self.lift)        # Traz a janela para a frente de outras
             self.after(0, self.focus_force) # Força o foco para a janela
             # ------------------------------------------------------------------
-            
+
             # Chama o próximo passo na thread principal
             self.after(0, self._fetch_user_profile)
         else:
@@ -168,14 +168,14 @@ class App(ctk.CTk):
 
     def _fetch_user_profile(self):
         # Garante que self.user_email é sempre uma string
-        self.user_email = str(self.auth_service.get_user_email(self.credentials)) 
+        self.user_email = str(self.auth_service.get_user_email(self.credentials))
         print(f"DEBUG (App): Email obtido do auth_service: '{self.user_email}'") # NOVO PRINT
-        
+
         if "Erro" in self.user_email or not self.user_email.strip(): # Verifica se há erro ou se está vazio
             self.after(0, lambda: messagebox.showerror("Erro de Autenticação", "Não foi possível obter o seu e-mail. Por favor, tente novamente ou contacte o o suporte."))
             self.after(0, self.perform_logout)
             return
-        
+
         self.user_profile = self.sheets_service.check_user_status(self.user_email)
         self.after(0, self.navigate_based_on_status)
 
@@ -186,7 +186,7 @@ class App(ctk.CTk):
 
         if status == "approved":
             self.load_secondary_data()
-            
+
             main_menu = self.frames["MainMenuView"]
             main_menu.update_user_info(self.user_email, self.user_profile)
 
@@ -200,7 +200,7 @@ class App(ctk.CTk):
             self.show_frame("PendingApprovalView")
         else:
             # Assegurar que RequestAccessView esteja no estado correto ao ser mostrada
-            self.frames["RequestAccessView"].on_show() 
+            self.frames["RequestAccessView"].on_show()
             self.show_frame("RequestAccessView")
 
     def perform_logout(self):
@@ -219,7 +219,7 @@ class App(ctk.CTk):
             self.perform_logout() # Força o logout para iniciar o fluxo de login
             return
         # ----------------------------------------
-        
+
         success, message = self.sheets_service.request_access(self.user_email, full_name, username, main_group, sub_group, company_name)
         if success:
             # Passar as cores explicitamente
@@ -232,7 +232,7 @@ class App(ctk.CTk):
                 messagebox.showerror("E-mail Já Registrado", "Este e-mail já está registado em nosso sistema. Por favor, utilize outro e-mail ou entre em contacto com o administrador para assistência.")
             else:
                 messagebox.showerror("Erro ao Enviar Solicitação", f"Não foi possível enviar sua solicitação de acesso: {message}\nPor favor, verifique seus dados e tente novamente.")
-    
+
     def get_all_occurrences(self, force_refresh=False):
         if force_refresh or self.occurrences_cache is None:
             self.occurrences_cache = self.sheets_service.get_all_occurrences()
@@ -244,7 +244,7 @@ class App(ctk.CTk):
         return self.users_cache
 
     def get_pending_requests(self): return self.sheets_service.get_pending_requests()
-    
+
     def update_user_access(self, email, new_status):
         self.sheets_service.update_user_status(email, new_status)
         self.users_cache = None
@@ -271,7 +271,12 @@ class App(ctk.CTk):
             NotificationPopup(self, message=f"Os status de {len(changes)} ocorrência(s) foram salvos com sucesso.", type="success",
                               bg_color_success="green", text_color_success="white",
                               bg_color_info="gray", text_color_info="white")
-            self.frames["AdminDashboardView"].load_all_occurrences(force_refresh=True)
+            # Força o recarregamento da aba de ocorrências no AdminDashboardView
+            if "AdminDashboardView" in self.frames and self.frames["AdminDashboardView"]._occurrences_tab_initialized:
+                self.frames["AdminDashboardView"].load_all_occurrences(force_refresh=True)
+            # Também recarrega o histórico para consistência
+            if "HistoryView" in self.frames:
+                self.frames["HistoryView"].load_history()
         else:
             messagebox.showerror("Erro", f"Ocorreu um erro ao salvar as alterações de status: {message}")
 
@@ -289,11 +294,12 @@ class App(ctk.CTk):
             self.frames["AdminDashboardView"].load_all_users(force_refresh=True)
         else:
             messagebox.showerror("Erro ao Salvar", f"Ocorreu um erro ao atualizar os perfis: {message}")
-        
-    def get_user_occurrences(self): 
+
+    def get_user_occurrences(self):
         return self.sheets_service.get_occurrences_by_user(self.user_email)
 
     def get_current_user_profile(self):
+        # Sempre busca o perfil mais recente para garantir permissões atualizadas
         return self.sheets_service.check_user_status(self.user_email)
 
     def submit_simple_call_occurrence(self, form_data):
@@ -324,7 +330,7 @@ class App(ctk.CTk):
         if main_group == 'PARTNER' and len(self.testes_adicionados) < 3:
             messagebox.showwarning("Validação Falhou", "É necessário adicionar pelo menos 3 testes para parceiros.")
             return
-        
+
         view = self.frames["RegistrationView"]
         view.set_submitting_state(True)
         threading.Thread(target=self._submit_full_occurrence_thread, args=(title, self.testes_adicionados.copy()), daemon=True).start()
@@ -349,3 +355,22 @@ class App(ctk.CTk):
             self.show_frame("MainMenuView")
         else:
             messagebox.showerror("Ocorreu um Erro", f"Não foi possível completar a operação: {message}\nPor favor, tente novamente.")
+
+    def update_occurrence_status_from_history(self, occurrence_id, new_status):
+        """
+        Atualiza o status de uma ocorrência a partir da tela de histórico.
+        """
+        success, message = self.sheets_service.update_occurrence_status(occurrence_id, new_status)
+        if success:
+            self.occurrences_cache = None # Limpa o cache para forçar recarregamento
+            NotificationPopup(self, message=f"Status da ocorrência {occurrence_id} atualizado para '{new_status}'.", type="success",
+                              bg_color_success="green", text_color_success="white",
+                              bg_color_info="gray", text_color_info="white")
+            # Recarrega o histórico para refletir a mudança
+            if "HistoryView" in self.frames:
+                self.frames["HistoryView"].load_history()
+            # Se o AdminDashboardView estiver aberto, força o recarregamento também
+            if "AdminDashboardView" in self.frames and self.frames["AdminDashboardView"]._occurrences_tab_initialized:
+                self.frames["AdminDashboardView"].load_all_occurrences(force_refresh=True)
+        else:
+            messagebox.showerror("Erro", f"Não foi possível atualizar o status da ocorrência: {message}")

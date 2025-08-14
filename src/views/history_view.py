@@ -26,16 +26,16 @@ class HistoryView(ctk.CTkFrame):
         self.configure(fg_color=self.controller.BASE_COLOR)
 
         self.cached_occurrences = [] # Cache para guardar os dados
-        
+
         # --- Configuração da Responsividade ---
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1) # Linha para o scrollable frame
-        
+
         self.title_label = ctk.CTkLabel(self, text="Histórico de Ocorrências",
                                         font=ctk.CTkFont(size=24, weight="bold"),
                                         text_color=self.controller.TEXT_COLOR)
         self.title_label.grid(row=0, column=0, padx=20, pady=(10, 10), sticky="ew")
-        
+
         # --- Frame de Filtros e Busca ---
         filter_frame = ctk.CTkFrame(self, fg_color="gray15") # Fundo do frame de filtros
         filter_frame.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
@@ -56,7 +56,7 @@ class HistoryView(ctk.CTkFrame):
 
         # Filtro por Status
         ctk.CTkLabel(filter_frame, text="Filtrar por Status:", text_color=self.controller.TEXT_COLOR).grid(row=1, column=2, sticky="w", padx=10, pady=(5, 0))
-        status_options = ["TODOS", "REGISTRADO", "EM ANÁLISE", "AGUARDANDO TERCEIROS", "RESOLVIDO", "CANCELADO"]
+        status_options = ["TODOS", "REGISTRADO", "EM ANÁLISE", "AGUARDANDO TERCEIROS", "PARCIALMENTE RESOLVIDO", "RESOLVIDO", "CANCELADO"] # Adicionado o novo status
         self.status_filter = ctk.CTkComboBox(filter_frame, values=status_options,
                                              fg_color="gray20", text_color=self.controller.TEXT_COLOR,
                                              border_color="gray40", button_color=self.controller.PRIMARY_COLOR,
@@ -118,13 +118,13 @@ class HistoryView(ctk.CTkFrame):
                                             fg_color=self.controller.GRAY_BUTTON_COLOR, text_color=self.controller.TEXT_COLOR,
                                             hover_color=self.controller.GRAY_HOVER_COLOR)
         self.refresh_button.grid(row=0, column=2, padx=(5, 0), sticky="ew")
-        
+
         # --- Frame de Scroll para a Lista de Ocorrências ---
         self.history_scrollable_frame = ctk.CTkScrollableFrame(self, label_text="Carregando histórico...",
                                                                fg_color="gray10",
                                                                label_text_color=self.controller.TEXT_COLOR)
         self.history_scrollable_frame.grid(row=2, column=0, padx=20, pady=10, sticky="nsew")
-        
+
         back_button = ctk.CTkButton(self, text="Voltar ao Menu", command=lambda: controller.show_frame("MainMenuView"),
                                     fg_color=self.controller.GRAY_BUTTON_COLOR, text_color=self.controller.TEXT_COLOR,
                                     hover_color=self.controller.GRAY_HOVER_COLOR)
@@ -149,7 +149,7 @@ class HistoryView(ctk.CTkFrame):
                 # Tenta converter a string de 8 dígitos para um objeto datetime
                 # Assume o formato DDMMYYYY para digitação
                 date_obj = datetime.strptime(digits, "%d%m%Y")
-                
+
                 # Formata de volta com hífens no formato DD-MM-AAAA
                 formatted_date = date_obj.strftime("%d-%m-%Y")
 
@@ -161,7 +161,7 @@ class HistoryView(ctk.CTkFrame):
             except ValueError:
                 # Se a conversão falhar (data inválida), marca como inválido
                 is_valid_format = False
-        
+
         # Validação final em caso de formato já com hífens
         if len(date_str) == 10 and re.fullmatch(r"^\d{2}-\d{2}-\d{4}$", date_str):
             try:
@@ -175,7 +175,7 @@ class HistoryView(ctk.CTkFrame):
             widget.configure(border_color=self.default_border_color)
         else:
             widget.configure(border_color="red")
-            
+
         return is_valid_format
 
     def on_show(self):
@@ -185,7 +185,7 @@ class HistoryView(ctk.CTkFrame):
         self.type_filter.set("TODOS")   # Reseta o filtro de tipo
         self.start_date_entry.delete(0, "end") # Limpa o campo de data de início
         self.end_date_entry.delete(0, "end")   # Limpa o campo de data de fim
-        
+
         # Garante que as bordas voltem ao normal ao exibir a tela
         self.start_date_entry.configure(border_color=self.default_border_color)
         self.end_date_entry.configure(border_color=self.default_border_color)
@@ -215,7 +215,7 @@ class HistoryView(ctk.CTkFrame):
         self.type_filter.set("TODOS")
         self.start_date_entry.delete(0, "end") # Limpa o campo de data de início
         self.end_date_entry.delete(0, "end")   # Limpa o campo de data de fim
-        
+
         # Garante que as bordas voltem ao normal após limpar os filtros
         self.start_date_entry.configure(border_color=self.default_border_color)
         self.end_date_entry.configure(border_color=self.default_border_color)
@@ -298,12 +298,15 @@ class HistoryView(ctk.CTkFrame):
     def _populate_history(self, occurrences, user_profile, search_term="", selected_status="TODOS", selected_type="TODOS", start_date_str="", end_date_str=""):
         """Preenche a lista de scroll com os cards das ocorrências."""
         main_group = user_profile.get("main_group")
+        sub_group = user_profile.get("sub_group") # Obter o sub_group
+        is_admin_or_super_admin = (main_group == "67_TELECOM" and (sub_group == "ADMIN" or sub_group == "SUPER_ADMIN"))
+
         if main_group == '67_TELECOM':
             self.title_label.configure(text="Histórico Geral de Ocorrências")
         elif main_group in ['PARTNER', 'PREFEITURA']:
             company = user_profile.get("company", "N/A")
             self.title_label.configure(text=f"Histórico de Ocorrências: {company}")
-        
+
         for widget in self.history_scrollable_frame.winfo_children():
             widget.destroy()
 
@@ -312,7 +315,7 @@ class HistoryView(ctk.CTkFrame):
             self.history_scrollable_frame.configure(label_text="Nenhuma ocorrência encontrada para os filtros aplicados.",
                                                     label_text_color=self.controller.TEXT_COLOR)
             return
-        
+
         filter_summary = []
         if search_term:
             filter_summary.append(f"Busca: '{search_term}'")
@@ -334,25 +337,27 @@ class HistoryView(ctk.CTkFrame):
             label_text = f"Todas as Ocorrências ({len(occurrences)})"
 
         self.history_scrollable_frame.configure(label_text=label_text, label_text_color=self.controller.TEXT_COLOR)
-        
+
+        status_options_for_editing = ["REGISTRADO", "EM ANÁLISE", "AGUARDANDO TERCEIROS", "PARCIALMENTE RESOLVIDO", "RESOLVIDO", "CANCELADO"]
+
         for item in occurrences:
             item_id = item.get('ID', 'N/A')
-            
+
             card_frame = ctk.CTkFrame(self.history_scrollable_frame, fg_color="gray20")
             card_frame.pack(fill="x", padx=5, pady=5)
             card_frame.grid_columnconfigure(0, weight=1)
 
             info_frame = ctk.CTkFrame(card_frame, fg_color="transparent")
             info_frame.grid(row=0, column=0, padx=10, pady=5, sticky="w")
-            
+
             # --- Lógica de obtenção do título para exibição no histórico ---
             # Tenta obter o título da chave 'Título da Ocorrência' (espera-se que venha normalizado do sheets_service)
             title = item.get('Título da Ocorrência')
-            
+
             # Se o título não for encontrado ou estiver vazio, tenta gerar um fallback
             if not title or str(title).strip() == "":
                 item_id_prefix = item_id.split('-')[0] if '-' in item_id else item_id
-                
+
                 if item_id_prefix == 'SCALL':
                     title = f"Chamada Simples de {item.get('Origem', 'N/A')} para {item.get('Destino', 'N/A')}"
                 elif item_id_prefix == 'EQUIP':
@@ -365,7 +370,7 @@ class HistoryView(ctk.CTkFrame):
 
             date_str = item.get('Data de Registro', 'N/A')
             status = item.get('Status', 'N/A')
-            
+
             # Obtenha a data de registro e formate-a
             formatted_date = 'N/A'
             if date_str != 'N/A':
@@ -383,11 +388,40 @@ class HistoryView(ctk.CTkFrame):
                          text_color=self.controller.TEXT_COLOR).pack(anchor="w")
             ctk.CTkLabel(info_frame, text=f"Registrado por: {item.get('Nome do Registrador', 'N/A')} em {formatted_date}",
                          anchor="w", text_color="gray60").pack(anchor="w")
-            ctk.CTkLabel(info_frame, text=f"Status: {status}", anchor="w",
-                         font=ctk.CTkFont(weight="bold"), text_color=self.controller.TEXT_COLOR).pack(anchor="w")
 
-            open_button = ctk.CTkButton(card_frame, text="Abrir", width=80,
+            # Frame para controles (status combo e botão Abrir)
+            controls_frame = ctk.CTkFrame(card_frame, fg_color="transparent")
+            controls_frame.grid(row=0, column=1, padx=10, pady=10, sticky="e")
+
+            if is_admin_or_super_admin:
+                # ComboBox para editar o status
+                status_combo = ctk.CTkComboBox(controls_frame, values=status_options_for_editing, width=180,
+                                               fg_color="gray20", text_color=self.controller.TEXT_COLOR,
+                                               border_color="gray40", button_color=self.controller.PRIMARY_COLOR,
+                                               button_hover_color=self.controller.ACCENT_COLOR,
+                                               command=partial(self._on_status_change_from_history, item_id))
+                status_combo.set(status) # Define o status atual
+                status_combo.pack(side="left", padx=(0, 10))
+            else:
+                # Se não for admin, apenas exibe o status como label
+                ctk.CTkLabel(info_frame, text=f"Status: {status}", anchor="w",
+                             font=ctk.CTkFont(weight="bold"), text_color=self.controller.TEXT_COLOR).pack(anchor="w")
+
+
+            open_button = ctk.CTkButton(controls_frame, text="Abrir", width=80,
                                         command=partial(self.controller.show_occurrence_details, item_id),
                                         fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
                                         hover_color=self.controller.ACCENT_COLOR)
-            open_button.grid(row=0, column=1, padx=10, pady=10, sticky="e")
+            open_button.pack(side="left")
+
+    def _on_status_change_from_history(self, occurrence_id, new_status):
+        """
+        Chamado quando o status de uma ocorrência é alterado no ComboBox do histórico.
+        """
+        # Confirmação antes de atualizar
+        if messagebox.askyesno("Confirmar Alteração de Status",
+                               f"Tem certeza que deseja alterar o status da ocorrência {occurrence_id} para '{new_status}'?"):
+            self.controller.update_occurrence_status_from_history(occurrence_id, new_status)
+        else:
+            # Se o usuário cancelar, recarrega o histórico para reverter o ComboBox
+            self.load_history()

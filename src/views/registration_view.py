@@ -83,7 +83,7 @@ class RegistrationView(ctk.CTkFrame):
         self.entry_op_b.grid(row=4, column=1, padx=10, pady=(0, 10), sticky="ew")
 
         ctk.CTkLabel(self.test_entry_frame, text="Status da Chamada", text_color=self.controller.TEXT_COLOR).grid(row=3, column=2, sticky="w", padx=10, pady=(5, 0))
-        self.combo_teste_status = ctk.CTkComboBox(self.test_entry_frame, values=["FALHA", "MUDA", "NÃO COMPLETA", "CHIADO", "COMPLETOU COM SUCESSO"],
+        self.combo_teste_status = ctk.CTkComboBox(self.test_entry_frame, values=["FALHA", "MUDA", "NÃO COMPLETA", "COMPLETOU COM SUCESSO"],
                                                   fg_color="gray20", text_color=self.controller.TEXT_COLOR,
                                                   border_color="gray40", button_color=self.controller.PRIMARY_COLOR,
                                                   button_hover_color=self.controller.ACCENT_COLOR)

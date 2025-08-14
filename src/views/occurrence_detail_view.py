@@ -8,6 +8,7 @@ import customtkinter as ctk
 import json
 import webbrowser
 from datetime import datetime # Importação adicionada
+from tkinter import messagebox # Importado para mensagens de erro/aviso
 
 class OccurrenceDetailView(ctk.CTkToplevel):
     """
@@ -17,7 +18,8 @@ class OccurrenceDetailView(ctk.CTkToplevel):
     def __init__(self, master, occurrence_data):
         super().__init__(master)
         self.master = master # Referência ao master (App)
-        
+        self.occurrence_data = occurrence_data # Armazena os dados da ocorrência
+
         self.title(f"Detalhes da Ocorrência: {occurrence_data.get('ID', 'N/A')}")
         self.geometry("600x650")
         # Garante que a janela fique sempre à frente da janela principal
@@ -26,7 +28,7 @@ class OccurrenceDetailView(ctk.CTkToplevel):
 
         # Acessar as cores do controller (App)
         self.controller = master # Master é a instância de App
-        
+
         # Definir a cor de fundo após a inicialização do super
         self.configure(fg_color=self.controller.BASE_COLOR)
 
@@ -40,8 +42,8 @@ class OccurrenceDetailView(ctk.CTkToplevel):
         # Lista de chaves a serem ignoradas no loop de exibição geral
         # Inclui 'Testes' e 'Anexos' (chaves originais) e suas possíveis normalizações em minúsculas
         keys_to_ignore_list = ['Testes', 'Anexos', 'testes', 'anexos']
-        
-        # Para evitar duplicações vindas do _get_all_records_safe, 
+
+        # Para evitar duplicações vindas do _get_all_records_safe,
         # vamos criar um conjunto para rastrear as chaves já exibidas (case-insensitive)
         shown_keys = set()
 
@@ -53,7 +55,7 @@ class OccurrenceDetailView(ctk.CTkToplevel):
             # Ignorar chaves que já foram exibidas (evita duplicadas)
             if key.lower() in shown_keys:
                 continue
-            
+
             # Adiciona a chave (em minúsculas) ao conjunto de chaves já exibidas
             shown_keys.add(key.lower())
 
@@ -132,10 +134,10 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                         # Cria um label que parece e age como um link
                         link_font = ctk.CTkFont(underline=True)
                         link_label = ctk.CTkLabel(
-                            anexos_container, 
+                            anexos_container,
                             text=f"Anexo {i+1}: Abrir no navegador",
-                            text_color=(self.controller.PRIMARY_COLOR, self.controller.ACCENT_COLOR), 
-                            cursor="hand2", 
+                            text_color=(self.controller.PRIMARY_COLOR, self.controller.ACCENT_COLOR),
+                            cursor="hand2",
                             font=link_font
                         )
                         link_label.pack(anchor="w", padx=10, pady=2)
@@ -145,9 +147,94 @@ class OccurrenceDetailView(ctk.CTkToplevel):
             except (json.JSONDecodeError, TypeError):
                 pass # Ignora erros se o JSON for inválido
 
+        # Nova seção para comentários
+        self.comments_header_label = ctk.CTkLabel(scrollable_frame, text="Comentários:", font=ctk.CTkFont(size=14, weight="bold"),
+                                                  text_color=self.controller.TEXT_COLOR)
+        self.comments_header_label.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=(15, 5), sticky="w")
+        row_counter += 1
+
+        self.comments_container = ctk.CTkFrame(scrollable_frame, fg_color="gray20")
+        self.comments_container.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+        row_counter += 1
+
+        # Área para adicionar novo comentário (visível apenas para admins/super_admins)
+        user_profile = self.controller.get_current_user_profile()
+        if user_profile.get("main_group") == "67_TELECOM" and (user_profile.get("sub_group") == "ADMIN" or user_profile.get("sub_group") == "SUPER_ADMIN"):
+            self.new_comment_textbox = ctk.CTkTextbox(scrollable_frame, height=80, placeholder_text="Adicione um novo comentário...",
+                                                      fg_color="gray20", text_color=self.controller.TEXT_COLOR,
+                                                      border_color="gray40")
+            self.new_comment_textbox.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=(10, 5), sticky="ew")
+            row_counter += 1
+
+            self.add_comment_button = ctk.CTkButton(scrollable_frame, text="Adicionar Comentário",
+                                                    command=self._add_comment,
+                                                    fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
+                                                    hover_color=self.controller.ACCENT_COLOR)
+            self.add_comment_button.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="ew")
+            row_counter += 1
+
+        # Carregar e exibir comentários
+        self._load_comments(occurrence_data.get('ID', 'N/A'))
+
+
         # --- Botão de Fechar ---
         close_button = ctk.CTkButton(self, text="Fechar", command=self.destroy,
                                      fg_color=self.controller.GRAY_BUTTON_COLOR,
                                      text_color=self.controller.TEXT_COLOR,
                                      hover_color=self.controller.GRAY_HOVER_COLOR)
         close_button.pack(pady=10)
+
+    def _load_comments(self, occurrence_id):
+        """Carrega e exibe os comentários para a ocorrência."""
+        for widget in self.comments_container.winfo_children():
+            widget.destroy()
+
+        comments = self.controller.sheets_service.get_occurrence_comments(occurrence_id)
+        if not comments:
+            ctk.CTkLabel(self.comments_container, text="Nenhum comentário ainda.", text_color="gray60").pack(padx=10, pady=5)
+            return
+
+        for comment in comments:
+            comment_frame = ctk.CTkFrame(self.comments_container, fg_color="gray15")
+            comment_frame.pack(fill="x", padx=5, pady=3)
+
+            comment_date = comment.get('Data_Comentario', 'N/A')
+            if comment_date != 'N/A':
+                try:
+                    date_obj = datetime.strptime(comment_date, "%Y-%m-%d %H:%M:%S")
+                    comment_date = date_obj.strftime("%d-%m-%Y %H:%M:%S")
+                except ValueError:
+                    pass # Mantenha o formato original se falhar
+
+            header_text = f"Por: {comment.get('Nome_Autor', 'N/A')} em {comment_date}"
+            ctk.CTkLabel(comment_frame, text=header_text, font=ctk.CTkFont(weight="bold"), text_color=self.controller.PRIMARY_COLOR).pack(anchor="w", padx=10, pady=(5,0))
+            ctk.CTkLabel(comment_frame, text=comment.get('Comentario', ''), wraplength=450, justify="left", text_color=self.controller.TEXT_COLOR).pack(anchor="w", padx=10, pady=(0,5))
+
+
+    def _add_comment(self):
+        """Lógica para adicionar um novo comentário."""
+        comment_text = self.new_comment_textbox.get("1.0", "end-1c").strip()
+        if not comment_text:
+            messagebox.showwarning("Campo Vazio", "Por favor, digite seu comentário antes de adicionar.")
+            return
+
+        occurrence_id = self.occurrence_data.get('ID', 'N/A')
+        user_email = self.controller.user_email
+        user_name = self.controller.user_profile.get("Nome Completo", user_email)
+
+        if occurrence_id == 'N/A':
+            messagebox.showerror("Erro", "Não foi possível identificar a ocorrência para adicionar o comentário.")
+            return
+
+        success, message = self.controller.sheets_service.add_occurrence_comment(occurrence_id, user_email, user_name, comment_text)
+        if success:
+            # Não use master para o NotificationPopup, use self (a janela Toplevel)
+            # ou o master original que é a instância de App
+            from .notification_popup import NotificationPopup # Importação local para evitar circular
+            NotificationPopup(self.master, message=message, type="success",
+                              bg_color_success="green", text_color_success="white",
+                              bg_color_info="gray", text_color_info="white")
+            self.new_comment_textbox.delete("1.0", "end")
+            self._load_comments(occurrence_id) # Recarrega a lista de comentários
+        else:
+            messagebox.showerror("Erro", f"Não foi possível adicionar o comentário: {message}")
