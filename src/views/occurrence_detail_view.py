@@ -20,6 +20,8 @@ class OccurrenceDetailView(ctk.CTkToplevel):
         self.master = master # Referência ao master (App)
         self.occurrence_data = occurrence_data # Armazena os dados da ocorrência
 
+        # print(f"DEBUG (OccurrenceDetailView): occurrence_data recebido: {self.occurrence_data}") # DEBUG PRINT REMOVIDO
+
         self.title(f"Detalhes da Ocorrência: {occurrence_data.get('ID', 'N/A')}")
         self.geometry("600x650")
         # Garante que a janela fique sempre à frente da janela principal
@@ -39,44 +41,91 @@ class OccurrenceDetailView(ctk.CTkToplevel):
 
         # --- Exibição dos Dados Gerais ---
         row_counter = 0
-        # Lista de chaves a serem ignoradas no loop de exibição geral
-        # Inclui 'Testes' e 'Anexos' (chaves originais) e suas possíveis normalizações em minúsculas
-        keys_to_ignore_list = ['Testes', 'Anexos', 'testes', 'anexos']
+        # Lista de chaves a serem ignoradas no loop de exibição geral (normalizadas)
+        keys_to_ignore_normalized = {'testes', 'anexos'}
 
-        # Para evitar duplicações vindas do _get_all_records_safe,
-        # vamos criar um conjunto para rastrear as chaves já exibidas (case-insensitive)
-        shown_keys = set()
+        # Mapeamento para preferir a capitalização original para exibição
+        # Adicione aqui qualquer chave que possa vir duplicada com capitalização diferente
+        display_key_preference = {
+            'descrição do problema': 'Descrição do problema',
+            'operadora a': 'Operadora A',
+            'operadora b': 'Operadora B',
+            'título da ocorrência': 'Título da Ocorrência',
+            'data de registro': 'Data de Registro',
+            'status': 'Status',
+            'id': 'ID',
+            'nome do registrador': 'Nome do Registrador', # Mantido, mas o SheetsService agora salva como 'Nome Completo'
+            'nome completo': 'Nome Completo', # Chave que o SheetsService agora salva
+            'username do registrador': 'Username do Registrador',
+            'e-mail do registrador': 'E-mail do Registrador',
+            'username': 'Username',
+            'email': 'Email',
+            'main_group': 'Grupo Principal',
+            'sub_group': 'Subgrupo',
+            'company': 'Empresa/Departamento',
+            'tipo': 'Tipo', # Para equipamentos
+            'modelo': 'Modelo', # Para equipamentos
+            'ramal': 'Ramal', # Para equipamentos
+            'localizacao': 'Localização', # Para equipamentos
+            'origem': 'Origem', # Para chamadas simples
+            'destino': 'Destino', # Para chamadas simples
+            'registrador main group': 'Registrador Main Group',
+            'registrador company': 'Registrador Company',
+        }
 
-        for key, value in occurrence_data.items():
-            # Ignorar se a chave (case-insensitive) estiver na lista de ignorados
-            if key.lower() in (k.lower() for k in keys_to_ignore_list):
+        # Coletar todas as chaves normalizadas únicas dos dados da ocorrência
+        unique_normalized_keys = set()
+        for key in occurrence_data.keys():
+            unique_normalized_keys.add(key.strip().lower())
+
+        # Iterar sobre as chaves normalizadas únicas para garantir que não haja duplicatas
+        for normalized_key in sorted(list(unique_normalized_keys)): # Ordenar para exibição consistente
+            if normalized_key in keys_to_ignore_normalized:
                 continue
 
-            # Ignorar chaves que já foram exibidas (evita duplicadas)
-            if key.lower() in shown_keys:
-                continue
+            # Determinar a melhor chave para exibição (preferindo a capitalização original)
+            display_key = normalized_key # Padrão para a chave normalizada
+            value_to_display = None
 
-            # Adiciona a chave (em minúsculas) ao conjunto de chaves já exibidas
-            shown_keys.add(key.lower())
+            # Tenta encontrar a chave preferida ou a original que corresponde à normalizada
+            if normalized_key in display_key_preference:
+                preferred_original_key = display_key_preference[normalized_key]
+                if preferred_original_key in occurrence_data:
+                    display_key = preferred_original_key
+                    value_to_display = occurrence_data[preferred_original_key]
 
-            display_key = key
-            display_value = value
+            # Se a chave preferida não foi encontrada ou não tinha valor, tenta a chave normalizada diretamente
+            if value_to_display is None:
+                if normalized_key in occurrence_data:
+                    display_key = normalized_key # Usa a chave normalizada para exibição
+                    value_to_display = occurrence_data[normalized_key]
+                else:
+                    # Fallback: tentar encontrar qualquer chave que normalize para esta
+                    for original_key, val in occurrence_data.items():
+                        if original_key.strip().lower() == normalized_key:
+                            display_key = original_key
+                            value_to_display = val
+                            break
 
-            # Formatação especial para algumas chaves
-            if key.lower() == 'data de registro': # Usa lower() para ser compatível com chaves normalizadas se necessário
+            if value_to_display is None or str(value_to_display).strip() == "":
+                continue # Não exibe campos vazios ou sem valor
+
+            # Formatação especial para alguns valores
+            formatted_value = value_to_display
+            if normalized_key == 'data de registro':
                 try:
-                    date_obj = datetime.strptime(str(value), "%Y-%m-%d %H:%M:%S")
-                    display_value = date_obj.strftime("%d-%m-%Y %H:%M:%S")
+                    date_obj = datetime.strptime(str(value_to_display), "%Y-%m-%d %H:%M:%S")
+                    formatted_value = date_obj.strftime("%d-%m-%Y %H:%M:%S")
                 except ValueError:
                     pass
-            elif key.lower() == 'status': # Usa lower()
-                display_value = str(value).upper()
+            elif normalized_key == 'status':
+                formatted_value = str(value_to_display).upper()
 
             key_label = ctk.CTkLabel(scrollable_frame, text=f"{display_key}:", font=ctk.CTkFont(weight="bold"),
                                      text_color=self.controller.TEXT_COLOR)
             key_label.grid(row=row_counter, column=0, padx=10, pady=5, sticky="ne")
 
-            value_label = ctk.CTkLabel(scrollable_frame, text=display_value, wraplength=400, justify="left",
+            value_label = ctk.CTkLabel(scrollable_frame, text=formatted_value, wraplength=400, justify="left",
                                        text_color="gray70")
             value_label.grid(row=row_counter, column=1, padx=10, pady=5, sticky="nw")
 
@@ -111,7 +160,10 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                                                  text_color=self.controller.TEXT_COLOR)
                         test_card.pack(fill="x", padx=10, pady=5)
                     row_counter += 1
-            except (json.JSONDecodeError, TypeError):
+            except (json.JSONDecodeError, TypeError) as e:
+                print(f"Erro ao carregar testes de ligação: {e}")
+                # print(f"Dados brutos dos testes: {testes_data}") # DEBUG PRINT REMOVIDO
+                # Opcional: messagebox.showerror("Erro de Dados", f"Falha ao carregar testes de ligação: {e}. Verifique a formatação na planilha.")
                 pass # Ignora erros se o JSON for inválido
 
         # --- Exibição dos Anexos ---
@@ -160,7 +212,7 @@ class OccurrenceDetailView(ctk.CTkToplevel):
         # Área para adicionar novo comentário (visível apenas para admins/super_admins)
         user_profile = self.controller.get_current_user_profile()
         if user_profile.get("main_group") == "67_TELECOM" and (user_profile.get("sub_group") == "ADMIN" or user_profile.get("sub_group") == "SUPER_ADMIN"):
-            self.new_comment_textbox = ctk.CTkTextbox(scrollable_frame, height=80, placeholder_text="Adicione um novo comentário...",
+            self.new_comment_textbox = ctk.CTkTextbox(scrollable_frame, height=80,
                                                       fg_color="gray20", text_color=self.controller.TEXT_COLOR,
                                                       border_color="gray40")
             self.new_comment_textbox.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=(10, 5), sticky="ew")

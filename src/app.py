@@ -169,7 +169,7 @@ class App(ctk.CTk):
     def _fetch_user_profile(self):
         # Garante que self.user_email é sempre uma string
         self.user_email = str(self.auth_service.get_user_email(self.credentials))
-        print(f"DEBUG (App): Email obtido do auth_service: '{self.user_email}'") # NOVO PRINT
+        # print(f"DEBUG (App): Email obtido do auth_service: '{self.user_email}'") # DEBUG PRINT REMOVIDO
 
         if "Erro" in self.user_email or not self.user_email.strip(): # Verifica se há erro ou se está vazio
             self.after(0, lambda: messagebox.showerror("Erro de Autenticação", "Não foi possível obter o seu e-mail. Por favor, tente novamente ou contacte o o suporte."))
@@ -213,7 +213,7 @@ class App(ctk.CTk):
 
     def submit_access_request(self, full_name, username, main_group, sub_group, company_name=None):
         # --- AQUI ESTÁ A VALIDAÇÃO ADICIONADA ---
-        print(f"DEBUG (App): User email before submitting access request: '{self.user_email}'") # Mantido para depuração
+        # print(f"DEBUG (App): User email before submitting access request: '{self.user_email}'") # DEBUG PRINT REMOVIDO
         if not self.user_email or self.user_email.strip() == "" or "Erro" in self.user_email:
             messagebox.showerror("Erro Crítico", "Não foi possível obter seu e-mail. Por favor, tente fazer login novamente.")
             self.perform_logout() # Força o logout para iniciar o fluxo de login

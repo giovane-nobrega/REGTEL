@@ -19,15 +19,15 @@ class RegistrationView(ctk.CTkFrame):
 
         # --- ESTRUTURA DE LAYOUT PRINCIPAL ---
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(2, weight=1) 
+        self.grid_rowconfigure(2, weight=1)
 
         main_occurrence_frame = ctk.CTkFrame(self, fg_color="gray15") # Fundo do frame de ocorrência principal
         main_occurrence_frame.grid(row=0, column=0, padx=10, pady=(10, 5), sticky="ew")
-        
+
         # --- ALTERAÇÃO AQUI: Frame de teste agora é uma variável de instância ---
         self.test_entry_frame = ctk.CTkFrame(self, fg_color="gray15") # Fundo do frame de entrada de teste
         self.test_entry_frame.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
-        
+
         test_list_frame = ctk.CTkFrame(self, fg_color="gray15") # Fundo do frame da lista de testes
         test_list_frame.grid(row=2, column=0, padx=10, pady=5, sticky="nsew")
         test_list_frame.grid_rowconfigure(1, weight=1)
@@ -50,7 +50,7 @@ class RegistrationView(ctk.CTkFrame):
         ctk.CTkLabel(self.test_entry_frame, text="2. Adicionar Testes de Ligação (Evidências)",
                      font=ctk.CTkFont(size=16, weight="bold"),
                      text_color=self.controller.TEXT_COLOR).grid(row=0, column=0, columnspan=4, sticky="w", padx=10, pady=(10, 10))
-        
+
         ctk.CTkLabel(self.test_entry_frame, text="Horário do Teste (HHMM)", text_color=self.controller.TEXT_COLOR).grid(row=1, column=0, sticky="w", padx=10, pady=(5, 0))
         self.entry_teste_horario = ctk.CTkEntry(self.test_entry_frame, placeholder_text="Ex: 1605",
                                                 fg_color="gray20", text_color=self.controller.TEXT_COLOR,
@@ -63,7 +63,7 @@ class RegistrationView(ctk.CTkFrame):
                                               fg_color="gray20", text_color=self.controller.TEXT_COLOR,
                                               border_color="gray40")
         self.entry_teste_num_a.grid(row=2, column=1, padx=10, pady=(0, 10), sticky="ew")
-        
+
         ctk.CTkLabel(self.test_entry_frame, text="Operadora de Origem (A)", text_color=self.controller.TEXT_COLOR).grid(row=1, column=2, sticky="w", padx=10, pady=(5, 0))
         self.entry_op_a = AutocompleteEntry(self.test_entry_frame, placeholder_text="Digite para buscar...",
                                             fg_color="gray20", text_color=self.controller.TEXT_COLOR,
@@ -83,18 +83,18 @@ class RegistrationView(ctk.CTkFrame):
         self.entry_op_b.grid(row=4, column=1, padx=10, pady=(0, 10), sticky="ew")
 
         ctk.CTkLabel(self.test_entry_frame, text="Status da Chamada", text_color=self.controller.TEXT_COLOR).grid(row=3, column=2, sticky="w", padx=10, pady=(5, 0))
-        self.combo_teste_status = ctk.CTkComboBox(self.test_entry_frame, values=["FALHA", "MUDA", "NÃO COMPLETA", "COMPLETOU COM SUCESSO"],
+        self.combo_teste_status = ctk.CTkComboBox(self.test_entry_frame, values=["FALHA", "MUDA", "NÃO COMPLETA", "CHIADO", "COMPLETOU COM SUCESSO"],
                                                   fg_color="gray20", text_color=self.controller.TEXT_COLOR,
                                                   border_color="gray40", button_color=self.controller.PRIMARY_COLOR,
                                                   button_hover_color=self.controller.ACCENT_COLOR)
         self.combo_teste_status.grid(row=4, column=2, padx=10, pady=(0, 10), sticky="ew")
-        
+
         ctk.CTkLabel(self.test_entry_frame, text="Descrição do Problema (obrigatório)", text_color=self.controller.TEXT_COLOR).grid(row=5, column=0, columnspan=3, sticky="w", padx=10, pady=(5, 0))
         self.entry_teste_obs = ctk.CTkEntry(self.test_entry_frame, placeholder_text="Descreva o problema detalhadamente (ex: a ligação caiu após 5 segundos)",
                                             fg_color="gray20", text_color=self.controller.TEXT_COLOR,
                                             border_color="gray40")
         self.entry_teste_obs.grid(row=6, column=0, columnspan=3, padx=10, pady=(0, 10), sticky="ew")
-        
+
         self.add_test_button = ctk.CTkButton(self.test_entry_frame, text="+ Adicionar Teste", command=self.add_or_update_test, height=36,
                                              fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
                                              hover_color=self.controller.ACCENT_COLOR)
@@ -112,7 +112,7 @@ class RegistrationView(ctk.CTkFrame):
                                          fg_color=self.controller.GRAY_BUTTON_COLOR, text_color=self.controller.TEXT_COLOR,
                                          hover_color=self.controller.GRAY_HOVER_COLOR)
         self.back_button.grid(row=0, column=0, padx=(0, 5), sticky="ew")
-        
+
         self.submit_button = ctk.CTkButton(final_buttons_frame, text="Registrar Ocorrência Completa", command=self.submit, height=40,
                                            fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
                                            hover_color=self.controller.ACCENT_COLOR)
@@ -149,10 +149,11 @@ class RegistrationView(ctk.CTkFrame):
         if not phone_number.strip():
             widget.configure(border_color=self.default_border_color)
             return True
-            
-        if not re.fullmatch(r'\d{11}', phone_number):
+
+        # ALTERAÇÃO: Remove a restrição de 11 dígitos. Agora aceita qualquer número de dígitos, desde que sejam apenas números.
+        if not re.fullmatch(r'^\d+$', phone_number):
             widget.configure(border_color="red")
-            # messagebox.showwarning("Formato Inválido", "O número de telefone deve conter 11 dígitos (apenas números, incluindo DDD).")
+            messagebox.showwarning("Formato Inválido", "O número de telefone deve conter apenas dígitos.")
             return False
         else:
             widget.configure(border_color=self.default_border_color)
@@ -165,7 +166,7 @@ class RegistrationView(ctk.CTkFrame):
     def on_show(self):
         profile = self.controller.get_current_user_profile()
         main_group = profile.get("main_group")
-        
+
         if main_group == 'PARTNER':
             self.test_list_label.configure(text="3. Testes a Serem Registrados (mínimo 3)")
         else:
@@ -189,7 +190,7 @@ class RegistrationView(ctk.CTkFrame):
         self.entry_op_a.delete(0, 'end')
         self.entry_op_b.delete(0, 'end')
         self.combo_teste_status.set("")
-        
+
         self.horario_valido = True
         self.add_test_button.configure(state="normal")
         self.entry_teste_horario.configure(border_color=self.default_border_color)
@@ -224,9 +225,19 @@ class RegistrationView(ctk.CTkFrame):
         status = self.combo_teste_status.get().upper()
         obs = self.entry_teste_obs.get().upper()
 
+        # NOVA VALIDAÇÃO: Impedir que número de origem e destino sejam iguais
+        if num_a == num_b:
+            messagebox.showwarning("Números Iguais", "O número de origem (A) e o número de destino (B) não podem ser os mesmos.")
+            self.entry_teste_num_a.configure(border_color="red")
+            self.entry_teste_num_b.configure(border_color="red")
+            return
+        else:
+            self.entry_teste_num_a.configure(border_color=self.default_border_color)
+            self.entry_teste_num_b.configure(border_color=self.default_border_color)
+
         teste_data = {"horario": horario, "num_a": num_a, "op_a": op_a,
                       "num_b": num_b, "op_b": op_b, "status": status, "obs": obs}
-        
+
         if self.controller.editing_index is None and teste_data in self.controller.testes_adicionados:
             messagebox.showwarning("Teste Duplicado", "Este teste exato já foi adicionado à lista.")
             return
@@ -313,6 +324,24 @@ class RegistrationView(ctk.CTkFrame):
         else:
             self.entry_ocorrencia_titulo.configure(border_color=self.default_border_color)
 
+        # --- NOVA VALIDAÇÃO PARA TESTES DE LIGAÇÃO ---
+        # Verifica se os campos de teste estão preenchidos mas não foram adicionados à lista
+        current_test_fields_filled = (
+            self.entry_teste_horario.get().strip() != "" or
+            self.entry_teste_num_a.get().strip() != "" or
+            self.entry_op_a.get().strip() != "" or
+            self.entry_teste_num_b.get().strip() != "" or
+            self.entry_op_b.get().strip() != "" or
+            self.combo_teste_status.get().strip() != "" or
+            self.entry_teste_obs.get().strip() != ""
+        )
+
+        if current_test_fields_filled and self.controller.editing_index is None: # Se há algo nos campos e não está em modo de edição
+            messagebox.showwarning("Teste Não Adicionado", "Você preencheu os campos de teste, mas não os adicionou à lista. Por favor, clique em '+ Adicionar Teste' antes de registrar a ocorrência completa.")
+            self.test_entry_frame.configure(border_color="red", border_width=2) # Destaca o frame de teste
+            return
+        # --- FIM DA NOVA VALIDAÇÃO ---
+
         # Validação de que há pelo menos 1 teste adicionado (e 3 para Parceiros)
         if not self.controller.testes_adicionados:
             messagebox.showwarning("Testes Obrigatórios", "É necessário adicionar pelo menos um teste para registrar a ocorrência.")
@@ -324,6 +353,7 @@ class RegistrationView(ctk.CTkFrame):
             messagebox.showwarning("Validação Falhou", "Para o perfil de Parceiro, é necessário adicionar pelo menos 3 testes.")
             return
 
+        # print(f"DEBUG (RegistrationView): Testes a serem enviados: {self.controller.testes_adicionados}") # DEBUG PRINT REMOVIDO
         self.controller.submit_full_occurrence(title)
 
     def set_submitting_state(self, is_submitting):
@@ -334,7 +364,7 @@ class RegistrationView(ctk.CTkFrame):
 
     def _validate_horario_live(self, event=None):
         horario_str = self.entry_teste_horario.get()
-        
+
         if not horario_str:
             self.horario_valido = True
             self.entry_teste_horario.configure(border_color=self.default_border_color)
@@ -347,7 +377,7 @@ class RegistrationView(ctk.CTkFrame):
 
         if not digits.isdigit() or len(digits) > 4:
             is_error = True
-        
+
         elif len(digits) == 4:
             try:
                 hora = int(digits[0:2])
@@ -363,7 +393,7 @@ class RegistrationView(ctk.CTkFrame):
                         self.entry_teste_horario.icursor(cursor_pos)
             except (ValueError, IndexError):
                 is_error = True
-        
+
         if is_error:
             self.horario_valido = False
             self.entry_teste_horario.configure(border_color="red")
@@ -372,4 +402,3 @@ class RegistrationView(ctk.CTkFrame):
             self.horario_valido = True
             self.entry_teste_horario.configure(border_color=self.default_border_color)
             return True
-

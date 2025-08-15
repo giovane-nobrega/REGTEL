@@ -187,6 +187,7 @@ class SheetsService:
             for user_rec in records:
                 # Usa a chave normalizada 'email' para a comparação
                 if user_rec.get("email") and user_rec["email"].strip().lower() == email.strip().lower():
+                    # print(f"DEBUG (SheetsService): Perfil do usuário encontrado: {user_rec}") # DEBUG PRINT REMOVIDO
                     return user_rec # Retorna o dicionário completo (com chaves originais e normalizadas)
         except Exception as e:
             print(f"Erro ao ler a planilha de usuários: {e}")
@@ -272,6 +273,11 @@ class SheetsService:
                 if not user_company or user_company != "67 INTERNET": # Garantir que o perfil está correto
                     return [] # Se não for 67 Internet, não deve ver nada
                 return [occ for occ in all_occurrences if occ.get('Registrador Company', '').strip().upper() == user_company]
+            elif sub_group == "67_TELECOM_USER": # Novo subgrupo: filtra por Registrador Company "67 TELECOM"
+                if not user_company or user_company != "67 TELECOM": # Garantir que o perfil está correto
+                    return [] # Se não for 67 Telecom, não deve ver nada
+                return [occ for occ in all_occurrences if occ.get('Registrador Company', '').strip().upper() == user_company]
+
 
         if main_group in ['PARTNER', 'PREFEITURA']:
             if not user_company:
@@ -392,15 +398,22 @@ class SheetsService:
         elif 'equip' in occ_id_lower:
             sheet_name = self.EQUIPMENT_SHEET
             status_col = 6
-        if not sheet_name: return
+        if not sheet_name: return False, "Tipo de ocorrência desconhecido." # Adicionado retorno de erro
         ws = self._get_worksheet(sheet_name)
-        if not ws: return
+        if not ws: return False, f"Falha ao aceder à planilha {sheet_name}." # Adicionado retorno de erro
         try:
             # ws.find busca na planilha, não nos records normalizados.
             cell = ws.find(occurrence_id, in_column=1) # Assume que a coluna 1 é o ID
-            if cell: ws.update_cell(cell.row, status_col, new_status)
-        except gspread.exceptions.CellNotFound: print(f"Ocorrência {occurrence_id} não encontrada.")
-        except Exception as e: print(f"Erro ao atualizar status da ocorrência {occurrence_id}: {e}")
+            if cell:
+                ws.update_cell(cell.row, status_col, new_status)
+                return True, "Status atualizado com sucesso." # Adicionado retorno de sucesso
+            else:
+                return False, f"Ocorrência {occurrence_id} não encontrada." # Adicionado retorno de erro
+        except gspread.exceptions.CellNotFound:
+            return False, f"Ocorrência {occurrence_id} não encontrada na planilha {sheet_name}." # Adicionado retorno de erro
+        except Exception as e:
+            return False, f"Erro ao atualizar status da ocorrência {occurrence_id}: {e}" # Adicionado retorno de erro
+
 
     def register_simple_call_occurrence(self, user_email, data):
         self._connect()
@@ -415,7 +428,7 @@ class SheetsService:
             title_to_register = f"CHAMADA SIMPLES DE {data.get('origem', 'N/A')} PARA {data.get('destino', 'N/A')}"
             new_row = [
                 new_id, now, title_to_register, # Coluna 3 é o título
-                user_email, user_profile.get("Nome Completo", "N/A"), user_profile.get("username", "N/A"), # Usar chaves originais para guardar
+                user_email, user_profile.get("name", "N/A"), user_profile.get("username", "N/A"), # Usar 'name' para o nome do registrador
                 'REGISTRADO', data.get('origem'), data.get('destino'), data.get('descricao'),
                 user_profile.get("main_group", "N/A"), user_profile.get("company", "")
             ]
@@ -442,7 +455,7 @@ class SheetsService:
 
         title_to_register = data.get('tipo', f"EQUIPAMENTO {new_id}") # Usar tipo como título
         new_row = [
-            new_id, now, user_email, user_profile.get("Nome Completo", "N/A"), user_profile.get("username", "N/A"), # Usar chaves originais para guardar
+            new_id, now, user_email, user_profile.get("name", "N/A"), user_profile.get("username", "N/A"), # Usar 'name' para o nome do registrador
             'REGISTRADO', title_to_register, data.get('modelo'), data.get('ramal'),
             data.get('localizacao'), data.get('descricao'), attachment_links_json,
             user_profile.get("main_group", "N/A"), user_profile.get("company", "")
@@ -464,14 +477,17 @@ class SheetsService:
         new_id = f"CALL-{len([rec for rec in current_records if rec.get('id')]) + 1:04d}" # Usa 'id' normalizado
 
         user_profile = self.check_user_status(user_email)
-        op_a = testes[0]['op_a'] if testes else 'N/A'
-        op_b = testes[0]['op_b'] if testes else 'N/A'
-        description = testes[0]['obs'] if testes else ""
+        # Verifica se 'testes' está vazio ou não é uma lista antes de tentar acessar o índice 0
+        op_a = testes[0]['op_a'] if testes and isinstance(testes, list) and len(testes) > 0 else 'N/A'
+        op_b = testes[0]['op_b'] if testes and isinstance(testes, list) and len(testes) > 0 else 'N/A'
+        description = testes[0]['obs'] if testes and isinstance(testes, list) and len(testes) > 0 else ""
         testes_json = json.dumps(testes)
+        # print(f"DEBUG (SheetsService): Testes JSON sendo registrados: {testes_json}") # DEBUG PRINT REMOVIDO
 
+        # REMOVIDO: o campo "[]" que representava anexos e causava desalinhamento
         new_row = [
-            new_id, now, title, user_email, user_profile.get("Nome Completo", "N/A"), user_profile.get("username", "N/A"), # Usar chaves originais para guardar
-            'REGISTRADO', op_a, op_b, testes_json, description, "[]",
+            new_id, now, title, user_email, user_profile.get("name", "N/A"), user_profile.get("username", "N/A"),
+            'REGISTRADO', op_a, op_b, testes_json, description,
             user_profile.get("main_group", "N/A"), user_profile.get("company", "")
         ]
         try:

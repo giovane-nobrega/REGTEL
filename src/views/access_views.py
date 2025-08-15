@@ -98,7 +98,8 @@ class RequestAccessView(ctk.CTkFrame):
 
         # Novo combobox para subgrupo dentro de "Colaboradores 67"
         self.subgroup_67_label = ctk.CTkLabel(affiliation_data_frame, text="Selecione o Subgrupo:", text_color=self.controller.TEXT_COLOR)
-        self.subgroup_67_combobox = ctk.CTkComboBox(affiliation_data_frame, values=["USER", "67_INTERNET_USER", "MANAGER", "ADMIN", "SUPER_ADMIN"],
+        # Removido "USER", adicionado "67_TELECOM_USER" como a opção padrão para usuários 67 Telecom
+        self.subgroup_67_combobox = ctk.CTkComboBox(affiliation_data_frame, values=["67_TELECOM_USER", "67_INTERNET_USER", "MANAGER", "ADMIN", "SUPER_ADMIN"],
                                                     fg_color="gray20", text_color=self.controller.TEXT_COLOR,
                                                     border_color="gray40", button_color=self.controller.PRIMARY_COLOR,
                                                     button_hover_color=self.controller.ACCENT_COLOR)
@@ -274,7 +275,8 @@ class RequestAccessView(ctk.CTkFrame):
             # Mostrar campos de subgrupo para 67 Telecom
             self.subgroup_67_label.grid(row=2, column=0, sticky="w", padx=15, pady=(5,0))
             self.subgroup_67_combobox.grid(row=2, column=1, sticky="ew", padx=15, pady=(5,10))
-            self.subgroup_67_combobox.set("USER") # Default para USER
+            # O novo padrão é "67_TELECOM_USER"
+            self.subgroup_67_combobox.set("67_TELECOM_USER") # Definindo 67_TELECOM_USER como padrão
 
         else: # Outros casos, esconder tudo
             self.company_label.grid_forget()
@@ -303,17 +305,24 @@ class RequestAccessView(ctk.CTkFrame):
         main_group = role_map.get(self.role_combobox.get())
 
         company_name = None
-        sub_group = "USER" # Subgrupo padrão para novas solicitações
+        # sub_group agora será definido pelo combobox, não mais um padrão fixo "USER"
+        sub_group = self.subgroup_67_combobox.get() if main_group == "67_TELECOM" else None # Alterado para None como fallback
 
         if main_group == "PARTNER":
             company_name = self.company_combobox.get()
         elif main_group == "PREFEITURA":
             company_name = self.company_combobox.get()
         elif main_group == "67_TELECOM":
-            sub_group = self.subgroup_67_combobox.get() # Obtenha o subgrupo selecionado
+            # sub_group já foi obtido acima
             if sub_group == "67_INTERNET_USER":
                 company_name = "67 INTERNET" # Define a empresa automaticamente para este subgrupo
-            # Se USER ou outro subgrupo, company_name permanece None ou vazio conforme necessidade
+            elif sub_group == "67_TELECOM_USER": # Nova condição para 67_TELECOM_USER
+                company_name = "67 TELECOM" # Define a empresa como "67 TELECOM"
+            # Para outros sub_groups como ADMIN, MANAGER, SUPER_ADMIN, company_name permanece None ou vazio, o que é aceitável.
+            # Se o sub_group for ADMIN, MANAGER, SUPER_ADMIN, a company_name pode ser vazia ou '67 TELECOM' conforme a necessidade de relatório.
+            # Para manter a consistência, se não for 67_INTERNET_USER ou 67_TELECOM_USER, e o main_group for 67_TELECOM, defina como '67 TELECOM'.
+            elif sub_group in ["ADMIN", "MANAGER", "SUPER_ADMIN"]:
+                company_name = "67 TELECOM" # Define a empresa como 67 TELECOM para estes subgrupos
 
         # --- Validações Finais Antes da Submissão ---
         all_valid = True

@@ -39,7 +39,7 @@ class SimpleCallView(ctk.CTkFrame):
         ctk.CTkLabel(form_frame, text="Número de Origem:", text_color=self.controller.TEXT_COLOR).grid(
             row=0, column=0, padx=10, pady=10, sticky="w")
         self.entry_num_origem = ctk.CTkEntry(
-            form_frame, placeholder_text="Apenas 11 dígitos, ex: 67999991234",
+            form_frame, placeholder_text="Apenas dígitos, ex: 67999991234", # Alterado o placeholder
             fg_color="gray20", text_color=self.controller.TEXT_COLOR,
             border_color="gray40")
         self.entry_num_origem.grid(
@@ -48,7 +48,7 @@ class SimpleCallView(ctk.CTkFrame):
         ctk.CTkLabel(form_frame, text="Número de Destino:", text_color=self.controller.TEXT_COLOR).grid(
             row=1, column=0, padx=10, pady=10, sticky="w")
         self.entry_num_destino = ctk.CTkEntry(
-            form_frame, placeholder_text="Apenas 11 dígitos, ex: 6734215678",
+            form_frame, placeholder_text="Apenas dígitos, ex: 6734215678", # Alterado o placeholder
             fg_color="gray20", text_color=self.controller.TEXT_COLOR,
             border_color="gray40")
         self.entry_num_destino.grid(
@@ -86,15 +86,17 @@ class SimpleCallView(ctk.CTkFrame):
 
 
     def _validate_phone_field(self, widget):
-        """Valida se um campo de telefone contém 11 dígitos numéricos."""
+        """Valida se um campo de telefone contém apenas dígitos."""
         phone_number = widget.get()
         # Se o campo estiver vazio, não consideramos um erro ainda (apenas na submissão)
-        if not phone_number:
+        if not phone_number.strip(): # Usar .strip() para considerar campos com apenas espaços em branco como vazios
             widget.configure(border_color=self.default_border_color)
             return True
 
-        if not re.fullmatch(r'\d{11}', phone_number):
+        # ALTERAÇÃO: Remove a restrição de 11 dígitos. Agora aceita qualquer número de dígitos, desde que sejam apenas números.
+        if not re.fullmatch(r'^\d+$', phone_number):
             widget.configure(border_color="red")
+            messagebox.showwarning("Formato Inválido", "O número de telefone deve conter apenas dígitos.")
             return False
         else:
             widget.configure(border_color=self.default_border_color)
@@ -140,9 +142,22 @@ class SimpleCallView(ctk.CTkFrame):
             messagebox.showwarning("Campos Inválidos", "Por favor, corrija os campos destacados em vermelho antes de registrar a ocorrência.")
             return
 
+        # NOVA VALIDAÇÃO: Impedir que número de origem e destino sejam iguais
+        num_origem = self.entry_num_origem.get().strip()
+        num_destino = self.entry_num_destino.get().strip()
+        if num_origem == num_destino:
+            messagebox.showwarning("Números Iguais", "O número de origem e o número de destino não podem ser os mesmos.")
+            self.entry_num_origem.configure(border_color="red")
+            self.entry_num_destino.configure(border_color="red")
+            return
+        else:
+            self.entry_num_origem.configure(border_color=self.default_border_color)
+            self.entry_num_destino.configure(border_color=self.default_border_color)
+
+
         form_data = {
-            "origem": self.entry_num_origem.get().upper(),
-            "destino": self.entry_num_destino.get().upper(),
+            "origem": num_origem.upper(), # Usar o valor já .strip()
+            "destino": num_destino.upper(), # Usar o valor já .strip()
             "descricao": self.description_textbox.get("1.0", "end-1c").upper()
         }
         self.controller.submit_simple_call_occurrence(form_data)
@@ -154,4 +169,3 @@ class SimpleCallView(ctk.CTkFrame):
         else:
             self.submit_button.configure(
                 state="normal", text="Registrar Ocorrência")
-

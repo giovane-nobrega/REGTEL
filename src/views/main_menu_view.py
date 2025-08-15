@@ -29,7 +29,7 @@ class MainMenuView(ctk.CTkFrame):
                                         font=ctk.CTkFont(size=28, weight="bold"),
                                         text_color=self.controller.TEXT_COLOR) # Cor do texto
         self.title_label.grid(row=1, column=0, pady=(0, 40))
-        
+
         # --- Definição de todos os botões possíveis com cores e ícones ---
         # Ícones unicode sólidos e preenchidos
         ICON_DASHBOARD = "📊"
@@ -47,7 +47,7 @@ class MainMenuView(ctk.CTkFrame):
                                           text_color=self.controller.TEXT_COLOR,
                                           hover_color=self.controller.ACCENT_COLOR, # Cor de acento no hover
                                           compound="left") # REMOVIDO: padx=10
-        
+
         self.partner_button = ctk.CTkButton(self, text=f"{ICON_CALL_DETAILED} Registrar Ocorrência de Chamada (Detalhado)",
                                             command=lambda: self.controller.show_frame("RegistrationView"),
                                             height=45, width=350, font=ctk.CTkFont(size=14),
@@ -55,7 +55,7 @@ class MainMenuView(ctk.CTkFrame):
                                             text_color=self.controller.TEXT_COLOR,
                                             hover_color=self.controller.ACCENT_COLOR,
                                             compound="left") # REMOVIDO: padx=10
-        
+
         self.prefeitura_call_button = ctk.CTkButton(self, text=f"{ICON_CALL_SIMPLE} Registrar Ocorrência de Chamada (Simplificado)",
                                                     command=lambda: self.controller.show_frame("SimpleCallView"),
                                                     height=45, width=350, font=ctk.CTkFont(size=14),
@@ -63,7 +63,7 @@ class MainMenuView(ctk.CTkFrame):
                                                     text_color=self.controller.TEXT_COLOR,
                                                     hover_color=self.controller.ACCENT_COLOR,
                                                     compound="left") # REMOVIDO: padx=10
-        
+
         self.prefeitura_equip_button = ctk.CTkButton(self, text=f"{ICON_EQUIPMENT} Registrar Suporte Técnico de Equipamento",
                                                      command=lambda: self.controller.show_frame("EquipmentView"),
                                                      height=45, width=350, font=ctk.CTkFont(size=14),
@@ -71,7 +71,7 @@ class MainMenuView(ctk.CTkFrame):
                                                      text_color=self.controller.TEXT_COLOR,
                                                      hover_color=self.controller.ACCENT_COLOR,
                                                      compound="left") # REMOVIDO: padx=10
-        
+
         self.history_button = ctk.CTkButton(self, text=f"{ICON_HISTORY} Ver Histórico de Ocorrências",
                                             command=lambda: self.controller.show_frame("HistoryView"),
                                             height=45, width=350, font=ctk.CTkFont(size=14),
@@ -79,7 +79,7 @@ class MainMenuView(ctk.CTkFrame):
                                             text_color=self.controller.TEXT_COLOR,
                                             hover_color=self.controller.ACCENT_COLOR,
                                             compound="left") # REMOVIDO: padx=10
-        
+
         self.logout_button = ctk.CTkButton(self, text=f"{ICON_LOGOUT} Logout (Trocar de usuário)",
                                            command=self.controller.perform_logout,
                                            height=45, width=350, font=ctk.CTkFont(size=14),
@@ -95,7 +95,7 @@ class MainMenuView(ctk.CTkFrame):
                                          text_color=self.controller.TEXT_COLOR,
                                          hover_color=self.controller.GRAY_HOVER_COLOR, # Hover cinza
                                          compound="left") # REMOVIDO: padx=10
-        
+
         # Label para mostrar o e-mail do utilizador logado
         self.status_label = ctk.CTkLabel(self, text="", font=ctk.CTkFont(size=12),
                                          text_color="gray70") # Texto levemente mais claro
@@ -115,13 +115,13 @@ class MainMenuView(ctk.CTkFrame):
         # Esconde todos os botões de perfil antes de mostrar os corretos
         for widget in (self.admin_button, self.partner_button, self.prefeitura_call_button, self.prefeitura_equip_button):
             widget.grid_forget()
-        
+
         main_group = user_profile.get("main_group")
         sub_group = user_profile.get("sub_group")
-        
+
         # Define a linha inicial para os botões de perfil
         next_row = 2
-            
+
         # Lógica especial para SUPER_ADMIN
         if main_group == "67_TELECOM" and sub_group == "SUPER_ADMIN":
             # O SUPER_ADMIN vê todos os botões de função
@@ -130,14 +130,15 @@ class MainMenuView(ctk.CTkFrame):
             self.partner_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
             self.prefeitura_call_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
             self.prefeitura_equip_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
-        
-        # Lógica para os outros utilizadores
-        elif main_group == "67_TELECOM" and sub_group == "ADMIN":
-            self.admin_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
-            self.partner_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
-            
-        elif main_group == "67_TELECOM": # MANAGER e USER
-            self.partner_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
+
+        # Lógica para outros subgrupos da 67_TELECOM (ADMIN, MANAGER, 67_TELECOM_USER, 67_INTERNET_USER)
+        elif main_group == "67_TELECOM":
+            if sub_group == "ADMIN":
+                self.admin_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
+                self.partner_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
+            # Se for MANAGER, 67_TELECOM_USER ou 67_INTERNET_USER, mostra o botão de ocorrência detalhada
+            elif sub_group in ["MANAGER", "67_TELECOM_USER", "67_INTERNET_USER"]:
+                self.partner_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
 
         elif main_group == "PARTNER":
             self.partner_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
@@ -145,14 +146,13 @@ class MainMenuView(ctk.CTkFrame):
         elif main_group == "PREFEITURA":
             self.prefeitura_call_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
             self.prefeitura_equip_button.grid(row=next_row, column=0, pady=8, padx=20); next_row += 1
-            
+
         # Botões comuns a todos os perfis
         self.history_button.grid(row=next_row, column=0, pady=8, padx=20)
         next_row += 1
-        
+
         # Adiciona um espaçamento maior antes dos botões de saída
         self.logout_button.grid(row=next_row, column=0, pady=(20, 8), padx=20)
         next_row += 1
-        
-        self.exit_button.grid(row=next_row, column=0, pady=8, padx=20)
 
+        self.exit_button.grid(row=next_row, column=0, pady=8, padx=20)
