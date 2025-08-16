@@ -26,6 +26,7 @@ class HistoryView(ctk.CTkFrame):
         self.configure(fg_color=self.controller.BASE_COLOR)
 
         self.cached_occurrences = [] # Cache para guardar os dados
+        self.return_to_view = "MainMenuView" # NOVO: Atributo para controlar para onde voltar
 
         # --- Configuração da Responsividade ---
         self.grid_columnconfigure(0, weight=1)
@@ -125,10 +126,18 @@ class HistoryView(ctk.CTkFrame):
                                                                label_text_color=self.controller.TEXT_COLOR)
         self.history_scrollable_frame.grid(row=2, column=0, padx=20, pady=10, sticky="nsew")
 
-        back_button = ctk.CTkButton(self, text="Voltar ao Menu", command=lambda: controller.show_frame("MainMenuView"),
+        # ATUALIZAÇÃO: Botão de voltar agora usa self.return_to_view
+        self.back_button = ctk.CTkButton(self, text="Voltar", command=self._go_back_to_previous_view,
                                     fg_color=self.controller.GRAY_BUTTON_COLOR, text_color=self.controller.TEXT_COLOR,
                                     hover_color=self.controller.GRAY_HOVER_COLOR)
-        back_button.grid(row=3, column=0, padx=20, pady=(0, 10), sticky="ew")
+        self.back_button.grid(row=3, column=0, padx=20, pady=(0, 10), sticky="ew")
+
+    def _go_back_to_previous_view(self):
+        """
+        Navega de volta para a tela anterior, se definida, ou para o MainMenu.
+        """
+        self.controller.show_frame(self.return_to_view)
+
 
     def _validate_date_live(self, widget, event=None, is_focus_out=False):
         """
@@ -178,7 +187,7 @@ class HistoryView(ctk.CTkFrame):
 
         return is_valid_format
 
-    def on_show(self):
+    def on_show(self, from_view=None): # NOVO: Adiciona o parâmetro from_view
         """Chamado sempre que a tela é exibida."""
         self.search_entry.delete(0, "end")
         self.status_filter.set("TODOS") # Reseta o filtro de status
@@ -189,6 +198,12 @@ class HistoryView(ctk.CTkFrame):
         # Garante que as bordas voltem ao normal ao exibir a tela
         self.start_date_entry.configure(border_color=self.default_border_color)
         self.end_date_entry.configure(border_color=self.default_border_color)
+
+        # Atualiza o destino do botão "Voltar"
+        if from_view == "AdminDashboardView":
+            self.return_to_view = "AdminDashboardView"
+        else:
+            self.return_to_view = "MainMenuView"
 
         # Configura a mensagem de carregamento antes de iniciar a thread
         self.history_scrollable_frame.configure(label_text="Carregando histórico...")

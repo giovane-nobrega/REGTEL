@@ -518,6 +518,46 @@ class SheetsService:
         except Exception as e:
             return False, f"Ocorreu um erro ao adicionar o comentário: {e}"
 
+    def update_occurrence_comment(self, comment_id, new_comment_text):
+        """Atualiza o texto de um comentário existente."""
+        self._connect()
+        ws = self._get_worksheet(self.OCCURRENCE_COMMENTS_SHEET)
+        if not ws: return False, "Falha ao aceder à planilha de comentários."
+
+        try:
+            # Encontra a célula na coluna de ID do comentário
+            cell = ws.find(comment_id, in_column=2) # Assumindo que o ID do comentário está na coluna 2
+            if cell:
+                # Atualiza a célula na coluna do comentário (coluna 6)
+                ws.update_cell(cell.row, 6, new_comment_text)
+                return True, "Comentário atualizado com sucesso."
+            else:
+                return False, f"Comentário com ID {comment_id} não encontrado."
+        except gspread.exceptions.CellNotFound:
+            return False, f"Comentário com ID {comment_id} não encontrado na planilha de comentários."
+        except Exception as e:
+            return False, f"Erro ao atualizar o comentário {comment_id}: {e}"
+
+    def delete_occurrence_comment(self, comment_id):
+        """Elimina um comentário da planilha."""
+        self._connect()
+        ws = self._get_worksheet(self.OCCURRENCE_COMMENTS_SHEET)
+        if not ws: return False, "Falha ao aceder à planilha de comentários."
+
+        try:
+            # Encontra a célula na coluna de ID do comentário
+            cell = ws.find(comment_id, in_column=2) # Assumindo que o ID do comentário está na coluna 2
+            if cell:
+                # Exclui a linha inteira onde o comentário foi encontrado
+                ws.delete_rows(cell.row)
+                return True, "Comentário eliminado com sucesso."
+            else:
+                return False, f"Comentário com ID {comment_id} não encontrado."
+        except gspread.exceptions.CellNotFound:
+            return False, f"Comentário com ID {comment_id} não encontrado na planilha de comentários."
+        except Exception as e:
+            return False, f"Erro ao eliminar o comentário {comment_id}: {e}"
+
     def get_occurrence_comments(self, occurrence_id):
         self._connect()
         ws = self._get_worksheet(self.OCCURRENCE_COMMENTS_SHEET)
@@ -535,3 +575,4 @@ class SheetsService:
         except Exception as e:
             print(f"Erro ao obter comentários da ocorrência {occurrence_id}: {e}")
             return []
+

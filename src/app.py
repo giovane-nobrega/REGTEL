@@ -97,6 +97,10 @@ class App(ctk.CTk):
             EquipmentView
         )
 
+        # NOVO: Adiciona um atributo para rastrear a tela atual e a tela anterior
+        self.current_frame = None
+        self.previous_frame_name = None # Armazenará o nome da tela anterior
+
         for F in view_classes:
             page_name = F.__name__
             frame = F(parent=container, controller=self)
@@ -105,11 +109,30 @@ class App(ctk.CTk):
 
         self.check_initial_login()
 
-    def show_frame(self, page_name):
+    def show_frame(self, page_name, from_view=None):
+        """
+        Mostra uma tela específica da aplicação e guarda a tela anterior para navegação de "voltar".
+        :param page_name: O nome da classe da tela a ser mostrada (ex: "MainMenuView").
+        :param from_view: O nome da tela de onde a navegação foi iniciada, se aplicável.
+        """
+        # Se from_view for fornecido e for diferente da tela atual, atualiza previous_frame_name
+        if from_view and self.current_frame and from_view != page_name:
+            self.previous_frame_name = from_view
+        elif not from_view: # Se não foi especificado de onde veio, limpa o previous_frame_name
+            self.previous_frame_name = None
+
+
         frame = self.frames[page_name]
         if hasattr(frame, 'on_show'):
-            frame.on_show()
+            # Se a tela for HistoryView, passe o nome da tela anterior
+            if page_name == "HistoryView":
+                frame.on_show(self.previous_frame_name)
+            else:
+                frame.on_show()
+
         frame.tkraise()
+        self.current_frame = page_name # Atualiza a tela atual
+
 
     def show_occurrence_details(self, occurrence_id):
         if self.detail_window and self.detail_window.winfo_exists():
@@ -374,3 +397,4 @@ class App(ctk.CTk):
                 self.frames["AdminDashboardView"].load_all_occurrences(force_refresh=True)
         else:
             messagebox.showerror("Erro", f"Não foi possível atualizar o status da ocorrência: {message}")
+

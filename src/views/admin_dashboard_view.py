@@ -150,8 +150,9 @@ class AdminDashboardView(ctk.CTkFrame):
 
 
         button_frame_filters = ctk.CTkFrame(filter_frame, fg_color="transparent")
+        # ALTERAÇÃO: Configura 3 colunas para distribuir o espaço igualmente
         button_frame_filters.grid(row=5, column=0, columnspan=4, sticky="ew", padx=10, pady=5)
-        button_frame_filters.grid_columnconfigure((0, 1), weight=1)
+        button_frame_filters.grid_columnconfigure((0, 1, 2), weight=1) # Adicionado weight para a 3ª coluna
 
         self.apply_filters_button_admin = ctk.CTkButton(button_frame_filters, text="Aplicar Filtros", command=self.filter_occurrences_admin,
                                                       fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
@@ -161,7 +162,15 @@ class AdminDashboardView(ctk.CTkFrame):
         self.clear_filters_button_admin = ctk.CTkButton(button_frame_filters, text="Limpar Filtros", command=self.clear_filters_admin,
                                                       fg_color=self.controller.GRAY_BUTTON_COLOR, text_color=self.controller.TEXT_COLOR,
                                                       hover_color=self.controller.GRAY_HOVER_COLOR)
-        self.clear_filters_button_admin.grid(row=0, column=1, padx=(5, 0), sticky="ew")
+        self.clear_filters_button_admin.grid(row=0, column=1, padx=(5, 5), sticky="ew") # Ajustado padx
+
+        # NOVO POSICIONAMENTO: Botão "Ir para Histórico"
+        ctk.CTkButton(button_frame_filters, text="Ir para Histórico",
+                      # ATUALIZAÇÃO: Passe o nome da tela atual como from_view
+                      command=lambda: self.controller.show_frame("HistoryView", from_view="AdminDashboardView"),
+                      fg_color=self.controller.PRIMARY_COLOR, # Pode ser outra cor se preferir
+                      text_color=self.controller.TEXT_COLOR,
+                      hover_color=self.controller.ACCENT_COLOR).grid(row=0, column=2, padx=(5, 0), sticky="ew") # Nova coluna
 
 
         self.all_occurrences_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando...",
@@ -169,16 +178,67 @@ class AdminDashboardView(ctk.CTkFrame):
                                                            label_text_color=self.controller.TEXT_COLOR)
         self.all_occurrences_frame.pack(fill="both", expand=True, pady=5, padx=5)
 
+        # Frame inferior, agora sem o botão "Ir para Histórico"
         button_frame = ctk.CTkFrame(tab, fg_color="transparent")
         button_frame.pack(fill="x", pady=5, padx=5)
+        button_frame.grid_columnconfigure((0, 1), weight=1) # Ajustado para 2 colunas
 
         ctk.CTkButton(button_frame, text="Salvar Alterações de Status", command=self.save_status_changes,
                       fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
-                      hover_color=self.controller.ACCENT_COLOR).pack(side="left", padx=(0, 10), expand=True, fill="x")
+                      hover_color=self.controller.ACCENT_COLOR).grid(row=0, column=0, padx=(0, 5), sticky="ew")
 
         ctk.CTkButton(button_frame, text="Atualizar Lista", command=lambda: self.load_all_occurrences(force_refresh=True),
                       fg_color=self.controller.GRAY_BUTTON_COLOR, text_color=self.controller.TEXT_COLOR,
-                      hover_color=self.controller.GRAY_HOVER_COLOR).pack(side="left", expand=True, fill="x")
+                      hover_color=self.controller.GRAY_HOVER_COLOR).grid(row=0, column=1, padx=(5, 0), sticky="ew")
+
+
+    def setup_access_tab(self, tab):
+        ctk.CTkLabel(tab, text="Gerenciar Solicitações de Acesso", text_color=self.controller.TEXT_COLOR).pack(pady=5)
+        self.pending_users_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando solicitações...",
+                                                         fg_color="gray10",
+                                                         label_text_color=self.controller.TEXT_COLOR)
+        self.pending_users_frame.pack(fill="both", expand=True, pady=5, padx=5)
+
+        ctk.CTkButton(tab, text="Atualizar Solicitações", command=self.load_access_requests,
+                      fg_color=self.controller.GRAY_BUTTON_COLOR, text_color=self.controller.TEXT_COLOR,
+                      hover_color=self.controller.GRAY_HOVER_COLOR).pack(pady=10)
+
+    def setup_users_tab(self, tab):
+        ctk.CTkLabel(tab, text="Gerenciar Perfis de Usuários", text_color=self.controller.TEXT_COLOR).pack(pady=5)
+
+        # Frame de busca e filtros para usuários
+        user_filter_frame = ctk.CTkFrame(tab, fg_color="gray15")
+        user_filter_frame.pack(fill="x", pady=(0, 10), padx=5)
+        user_filter_frame.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(user_filter_frame, text="Busca por Usuário:", text_color=self.controller.TEXT_COLOR).grid(row=0, column=0, sticky="w", padx=10, pady=(5, 0))
+        self.search_user_entry = ctk.CTkEntry(user_filter_frame, placeholder_text="Nome, e-mail ou username...",
+                                               fg_color="gray20", text_color=self.controller.TEXT_COLOR,
+                                               border_color="gray40")
+        self.search_user_entry.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 10))
+        self.search_user_entry.bind("<KeyRelease>", self.filter_users_admin)
+
+
+        self.all_users_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando usuários...",
+                                                      fg_color="gray10",
+                                                      label_text_color=self.controller.TEXT_COLOR)
+        self.all_users_frame.pack(fill="both", expand=True, pady=5, padx=5)
+
+        # Frame para os botões de ação na aba de Usuários
+        user_buttons_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        user_buttons_frame.pack(fill="x", pady=5, padx=5)
+        user_buttons_frame.grid_columnconfigure((0, 1), weight=1) # Configura para duas colunas de peso igual
+
+        # Botão "Salvar Alterações de Perfil"
+        ctk.CTkButton(user_buttons_frame, text="Salvar Alterações de Perfil", command=self.save_profile_changes,
+                      fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
+                      hover_color=self.controller.ACCENT_COLOR).grid(row=0, column=0, padx=(0, 5), sticky="ew")
+
+        # Botão "Atualizar Lista de Usuários"
+        ctk.CTkButton(user_buttons_frame, text="Atualizar Lista de Usuários", command=lambda: self.load_all_users(force_refresh=True),
+                      fg_color=self.controller.GRAY_BUTTON_COLOR, text_color=self.controller.TEXT_COLOR,
+                      hover_color=self.controller.GRAY_HOVER_COLOR).grid(row=0, column=1, padx=(5, 0), sticky="ew")
+
 
     def _validate_date_live_admin(self, widget, event=None, is_focus_out=False):
         """
@@ -234,7 +294,7 @@ class AdminDashboardView(ctk.CTkFrame):
         self.status_filter_admin.set("TODOS")
         self.type_filter_admin.set("TODOS")
         self.start_date_entry_admin.delete(0, "end")
-        self.end_date_entry_admin.delete(0, "end")
+        self.end_date_entry_admin.delete("0", "end")
 
         self.start_date_entry_admin.configure(border_color=self.default_border_color_admin)
         self.end_date_entry_admin.configure(border_color=self.default_border_color_admin)
@@ -366,7 +426,7 @@ class AdminDashboardView(ctk.CTkFrame):
 
     def setup_access_tab(self, tab):
         ctk.CTkLabel(tab, text="Solicitações de Acesso Pendentes", text_color=self.controller.TEXT_COLOR).pack(pady=5)
-        self.pending_users_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando...",
+        self.pending_users_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando solicitações...",
                                                           fg_color="gray10",
                                                           label_text_color=self.controller.TEXT_COLOR)
         self.pending_users_frame.pack(fill="both", expand=True, pady=5, padx=5)
@@ -387,9 +447,11 @@ class AdminDashboardView(ctk.CTkFrame):
         for user in pending_list:
             card = ctk.CTkFrame(self.pending_users_frame, fg_color="gray20")
             card.pack(fill="x", pady=5)
+            card.grid_columnconfigure(0, weight=1)
 
             company_info = f" ({user.get('company')})" if user.get('company') else ""
-            info_text = f"Nome: {user.get('name', 'N/A')} (@{user.get('username', 'N/A')})\nE-mail: {user['email']}\nVínculo: {user['main_group']}{company_info}"
+            info_text = f"Nome: {user.get('name', 'N/A')} (@{user.get('username', 'N/A')})\n" \
+                        f"E-mail: {user['email']}\nVínculo: {user['main_group']}{company_info}"
 
             ctk.CTkLabel(card, text=info_text, justify="left",
                          text_color=self.controller.TEXT_COLOR).pack(side="left", padx=10, pady=5)
@@ -443,7 +505,7 @@ class AdminDashboardView(ctk.CTkFrame):
         self.original_profiles.clear()
         for widget in self.all_users_frame.winfo_children(): widget.destroy()
         if not all_users_list:
-            self.all_users_frame.configure(label_text="Nenhum usuário encontrado.")
+            self.all_users_frame.configure(label_text="Nenhuma usuário encontrado.")
             return
         self.all_users_frame.configure(label_text="")
         main_group_options = ["67_TELECOM", "PARTNER", "PREFEITURA"]
