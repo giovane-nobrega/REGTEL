@@ -7,6 +7,8 @@
 import os
 import sys
 from tkinter import messagebox
+import json # Importado para serializar/deserializar credenciais
+import datetime # Importado para lidar com objetos datetime
 
 # --- Dependências Google ---
 from google.auth.transport.requests import Request
@@ -15,6 +17,10 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.exceptions import RefreshError
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
+
+# Importa o novo AuthManager e o date_utils
+from services.auth_manager import AuthManager
+from utils.date_utils import safe_fromisoformat # Importa a função utilitária
 
 class AuthService:
     """Lida com a autenticação de utilizadores (OAuth) e da conta de serviço."""
@@ -25,8 +31,10 @@ class AuthService:
         self.SCOPES_SERVICE_ACCOUNT = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         
         self.CLIENT_SECRET_FILE = self._resource_path("client_secrets.json")
-        self.TOKEN_FILE = self._resource_path("token.json")
+        # self.TOKEN_FILE = self._resource_path("token.json") # REMOVIDO: Não usaremos mais token.json diretamente
         self.SERVICE_ACCOUNT_FILE = self._resource_path("service_account.json")
+
+        self.auth_manager = AuthManager() # Instância do AuthManager
 
     def _resource_path(self, relative_path):
         """ Obtém o caminho absoluto para os recursos, funciona para dev e para executável. """
@@ -37,23 +45,39 @@ class AuthService:
         return os.path.join(base_path, relative_path)
 
     def load_user_credentials(self):
-        """Carrega as credenciais do utilizador a partir do ficheiro token.json."""
+        """
+        Carrega as credenciais do utilizador a partir do armazenamento seguro.
+        Tenta refrescar se expiradas.
+        ATUALIZADO: Corrigido tratamento de expiry e inclusão de id_token.
+        """
         creds = None
-        if os.path.exists(self.TOKEN_FILE):
+        # Tenta carregar a sessão criptografada
+        session_data = self.auth_manager.load_session()
+        
+        if session_data:
             try:
-                # Carrega as credenciais com os SCOPES_USER atualizados
-                creds = Credentials.from_authorized_user_file(self.TOKEN_FILE, self.SCOPES_USER)
+                # NOVO: Converte a string 'expiry' de volta para objeto datetime
+                if 'expiry' in session_data and session_data['expiry']:
+                    session_data['expiry'] = safe_fromisoformat(session_data['expiry'])
+                
+                # Recria o objeto Credentials a partir dos dados salvos
+                creds = Credentials.from_authorized_user_info(session_data, self.SCOPES_USER)
+                
+                # Se as credenciais existirem, estiverem expiradas e tiverem um refresh_token, tenta refrescar
                 if creds and creds.expired and creds.refresh_token:
                     creds.refresh(Request())
+                    # Se o refresh for bem-sucedido, salva as credenciais atualizadas
                     self.save_user_credentials(creds)
+                
+                # Se as credenciais forem válidas após carregar ou refrescar
                 if creds and creds.valid:
                     return creds
             except RefreshError as e:
-                # Tratamento de erro quando o scope muda ou o token é inválido
+                # Tratamento de erro quando o scope muda ou o token é inválido/revogado
                 if 'Scope has changed' in str(e) or 'invalid_grant' in str(e):
                     messagebox.showwarning("Permissões Atualizadas", 
                                            "As permissões da aplicação foram atualizadas ou sua sessão expirou. Por favor, faça o login novamente.")
-                    self.logout() # Apaga o token.json inválido
+                    self.logout() # Apaga o token inválido
                 else:
                     messagebox.showerror("Erro de Autenticação", f"Ocorreu um erro ao verificar sua sessão: {e}")
                 return None
@@ -65,16 +89,34 @@ class AuthService:
         return None
 
     def save_user_credentials(self, credentials):
-        """Salva as credenciais do utilizador no ficheiro token.json."""
-        with open(self.TOKEN_FILE, 'w') as token:
-            token.write(credentials.to_json())
+        """
+        Salva as credenciais do utilizador de forma segura usando AuthManager.
+        ATUALIZADO: Inclui expiry (como string ISO) e id_token.
+        """
+        # Converte o objeto Credentials para um dicionário serializável
+        creds_data = {
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes,
+            'universe_domain': credentials.universe_domain,
+            # NOVO: Salva expiry como string ISO 8601
+            'expiry': credentials.expiry.isoformat() if credentials.expiry else None,
+            # NOVO: Salva id_token
+            'id_token': credentials.id_token
+        }
+        self.auth_manager.save_session(creds_data)
 
     def run_login_flow(self):
         """Inicia o fluxo de login OAuth2 para o utilizador."""
         try:
             # Garante que o fluxo OAuth utiliza os SCOPES_USER atualizados
             flow = InstalledAppFlow.from_client_secrets_file(self.CLIENT_SECRET_FILE, self.SCOPES_USER)
-            return flow.run_local_server(port=0)
+            creds = flow.run_local_server(port=0)
+            self.save_user_credentials(creds) # Salva as credenciais recém-obtidas
+            return creds
         except Exception as e:
             print(f"Erro no fluxo de login do utilizador: {e}")
             messagebox.showerror("Erro de Login", f"Não foi possível iniciar o login. Verifique o ficheiro 'client_secrets.json' e sua conexão com a internet.\n\nDetalhes: {e}")
@@ -82,8 +124,10 @@ class AuthService:
 
     def logout(self):
         """Remove o ficheiro de token, efetivamente fazendo logout."""
-        if os.path.exists(self.TOKEN_FILE):
-            os.remove(self.TOKEN_FILE)
+        self.auth_manager.clear_session() # Limpa a sessão salva
+        # Se você usava token.json, remova a linha abaixo
+        # if os.path.exists(self.TOKEN_FILE):
+        #     os.remove(self.TOKEN_FILE)
 
     def get_user_email(self, credentials):
         """Obtém o e-mail do utilizador autenticado."""
@@ -114,4 +158,3 @@ class AuthService:
         except Exception as e:
             messagebox.showerror("Erro Crítico", f"Falha ao carregar credenciais da conta de serviço: {e}")
             return None
-
