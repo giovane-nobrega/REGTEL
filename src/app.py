@@ -8,6 +8,9 @@ from tkinter import messagebox
 import threading
 import os
 import sys
+import requests # NOVO: Para fazer requisições HTTP para verificar a versão
+import subprocess # NOVO: Para executar o script de atualização
+import time # NOVO: Para pausas no processo de atualização
 
 # Importações dos módulos de serviço e das views
 from services.auth_service import AuthService
@@ -108,6 +111,15 @@ class App(ctk.CTk):
             frame.place(relwidth=1.0, relheight=1.0)
 
         self.check_initial_login()
+
+        # --- NOVO: Configurações de Atualização ---
+        self.CURRENT_APP_VERSION = "1.0.0" # ATUALIZE: Defina a versão atual da sua aplicação aqui
+        self.REMOTE_VERSION_URL = "https://raw.githubusercontent.com/seu_usuario/seu_repositorio/main/version.txt" # ATUALIZE: URL para o ficheiro version.txt
+        self.NEW_INSTALLER_DOWNLOAD_URL = "https://github.com/seu_usuario/seu_repositorio/releases/download/v1.0.1/REGTEL_Installer_1.0.1.exe" # ATUALIZE: URL para o novo instalador
+
+        # Inicia a verificação de atualização em uma thread separada após um pequeno atraso
+        self.after(2000, lambda: threading.Thread(target=self.check_for_updates, daemon=True).start())
+
 
     def show_frame(self, page_name, from_view=None):
         """
@@ -397,4 +409,117 @@ class App(ctk.CTk):
                 self.frames["AdminDashboardView"].load_all_occurrences(force_refresh=True)
         else:
             messagebox.showerror("Erro", f"Não foi possível atualizar o status da ocorrência: {message}")
+
+    def check_for_updates(self):
+        """
+        Verifica se há uma nova versão da aplicação disponível online.
+        """
+        try:
+            response = requests.get(self.REMOTE_VERSION_URL, timeout=5)
+            response.raise_for_status() # Levanta um erro para códigos de status HTTP ruins (4xx ou 5xx)
+            remote_version = response.text.strip()
+
+            if remote_version and self._compare_versions(remote_version, self.CURRENT_APP_VERSION) > 0:
+                # Nova versão disponível
+                self.after(0, lambda: self._prompt_for_update(remote_version))
+            else:
+                print("REGTEL: Nenhuma atualização disponível ou já está na versão mais recente.")
+        except requests.exceptions.RequestException as e:
+            print(f"REGTEL: Erro ao verificar atualizações: {e}")
+            # Não mostra erro ao utilizador para falhas de verificação de atualização silenciosas
+        except Exception as e:
+            print(f"REGTEL: Erro inesperado na verificação de atualização: {e}")
+
+    def _compare_versions(self, version1, version2):
+        """
+        Compara duas strings de versão (ex: '1.0.1' vs '1.0.0').
+        Retorna:
+        > 0 se version1 > version2
+        < 0 se version1 < version2
+        = 0 se version1 == version2
+        """
+        v1_parts = [int(p) for p in version1.split('.')]
+        v2_parts = [int(p) for p in version2.split('.')]
+
+        for i in range(max(len(v1_parts), len(v2_parts))):
+            p1 = v1_parts[i] if i < len(v1_parts) else 0
+            p2 = v2_parts[i] if i < len(v2_parts) else 0
+            if p1 > p2:
+                return 1
+            if p1 < p2:
+                return -1
+        return 0
+
+    def _prompt_for_update(self, remote_version):
+        """
+        Pergunta ao utilizador se deseja atualizar a aplicação.
+        """
+        if messagebox.askyesno(
+            "Atualização Disponível",
+            f"Uma nova versão do REGTEL ({remote_version}) está disponível!\n"
+            "Deseja descarregar e instalar a atualização agora?\n\n"
+            "A aplicação será fechada para iniciar o processo de atualização."
+        ):
+            self.initiate_update()
+        else:
+            NotificationPopup(self, message="Atualização adiada. Pode verificar novamente mais tarde.", type="info",
+                              bg_color_info="gray", text_color_info="white")
+
+    def initiate_update(self):
+        """
+        Inicia o script de atualização e fecha a aplicação principal.
+        """
+        # Determina o caminho para o script updater.py
+        if hasattr(sys, '_MEIPASS'):
+            # Se estiver num executável PyInstaller, o updater.py estará no diretório temporário
+            updater_script_path = os.path.join(sys._MEIPASS, 'updater.py')
+        else:
+            # Em ambiente de desenvolvimento, o updater.py está em src/services
+            updater_script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'services', 'updater.py'))
+        
+        # O caminho para o executável atual da aplicação
+        current_app_executable = sys.executable # sys.executable é o caminho para o executável atual (python.exe ou REGTEL.exe)
+        
+        # NOVO: Passa o caminho do diretório de instalação da aplicação para o updater
+        # Se for um onefile, o path é o diretório do executável
+        # Se for um onedir, é o diretório raiz da distribuição
+        if hasattr(sys, '_MEIPASS'):
+            # Em PyInstaller onefile, sys._MEIPASS é o diretório temporário onde os ficheiros são extraídos
+            # O executável real está em sys.executable. O diretório de instalação é o diretório do executável.
+            app_install_dir = os.path.dirname(sys.executable)
+        else:
+            # Em desenvolvimento, o diretório de instalação é o diretório raiz do projeto
+            app_install_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+
+        try:
+            # Lança o script updater.py como um processo separado
+            # Usamos 'pythonw.exe' no Windows para evitar uma janela de console
+            # sys.executable aponta para o interpretador Python ou para o executável PyInstaller
+            if sys.platform.startswith('win'):
+                # Tenta usar pythonw.exe para evitar a janela do console
+                python_exe = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
+                if not os.path.exists(python_exe):
+                    python_exe = sys.executable # Fallback para python.exe ou o próprio executável
+                
+                subprocess.Popen([
+                    python_exe,
+                    updater_script_path,
+                    self.NEW_INSTALLER_DOWNLOAD_URL,
+                    app_install_dir # Passa o diretório de instalação
+                ], shell=False, creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
+            else:
+                # Para Linux/macOS, executa diretamente com o interpretador
+                subprocess.Popen([
+                    sys.executable,
+                    updater_script_path,
+                    self.NEW_INSTALLER_DOWNLOAD_URL,
+                    app_install_dir # Passa o diretório de instalação
+                ], shell=False)
+
+            print("REGTEL: Iniciando processo de atualização. A aplicação será fechada.")
+            self.quit() # Fecha a aplicação principal
+        except Exception as e:
+            messagebox.showerror("Erro de Atualização", f"Não foi possível iniciar o processo de atualização: {e}")
+            print(f"REGTEL: Erro ao iniciar o updater: {e}")
 
