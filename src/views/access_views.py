@@ -99,7 +99,7 @@ class RequestAccessView(ctk.CTkFrame):
         # Novo combobox para subgrupo dentro de "Colaboradores 67"
         self.subgroup_67_label = ctk.CTkLabel(affiliation_data_frame, text="Selecione o Subgrupo:", text_color=self.controller.TEXT_COLOR)
         # Removido "USER", adicionado "67_TELECOM_USER" como a opção padrão para usuários 67 Telecom
-        self.subgroup_67_combobox = ctk.CTkComboBox(affiliation_data_frame, values=["67_TELECOM_USER", "67_INTERNET_USER", "MANAGER", "ADMIN", "SUPER_ADMIN"],
+        self.subgroup_67_combobox = ctk.CTkComboBox(affiliation_data_frame, values=["67_TELECOM_USER", "67_INTERNET_USER"],
                                                     fg_color="gray20", text_color=self.controller.TEXT_COLOR,
                                                     border_color="gray40", button_color=self.controller.PRIMARY_COLOR,
                                                     button_hover_color=self.controller.ACCENT_COLOR)

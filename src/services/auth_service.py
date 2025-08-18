@@ -8,7 +8,7 @@ import os
 import sys
 from tkinter import messagebox
 import json # Importado para serializar/deserializar credenciais
-import datetime # Importado para lidar com objetos datetime
+# import datetime # REMOVIDO: Não é mais necessário para a conversão de expiry aqui
 
 # --- Dependências Google ---
 from google.auth.transport.requests import Request
@@ -20,7 +20,7 @@ from google.oauth2 import service_account
 
 # Importa o novo AuthManager e o date_utils
 from services.auth_manager import AuthManager
-from utils.date_utils import safe_fromisoformat # Importa a função utilitária
+from utils.date_utils import safe_fromisoformat # Importa a função utilitária (ainda pode ser útil para outros contextos)
 
 class AuthService:
     """Lida com a autenticação de utilizadores (OAuth) e da conta de serviço."""
@@ -31,7 +31,6 @@ class AuthService:
         self.SCOPES_SERVICE_ACCOUNT = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         
         self.CLIENT_SECRET_FILE = self._resource_path("client_secrets.json")
-        # self.TOKEN_FILE = self._resource_path("token.json") # REMOVIDO: Não usaremos mais token.json diretamente
         self.SERVICE_ACCOUNT_FILE = self._resource_path("service_account.json")
 
         self.auth_manager = AuthManager() # Instância do AuthManager
@@ -48,7 +47,7 @@ class AuthService:
         """
         Carrega as credenciais do utilizador a partir do armazenamento seguro.
         Tenta refrescar se expiradas.
-        ATUALIZADO: Corrigido tratamento de expiry e inclusão de id_token.
+        CORRIGIDO: O campo 'expiry' é passado como string ISO para Credentials.from_authorized_user_info.
         """
         creds = None
         # Tenta carregar a sessão criptografada
@@ -56,11 +55,13 @@ class AuthService:
         
         if session_data:
             try:
-                # NOVO: Converte a string 'expiry' de volta para objeto datetime
-                if 'expiry' in session_data and session_data['expiry']:
-                    session_data['expiry'] = safe_fromisoformat(session_data['expiry'])
+                # REMOVIDO: A conversão explícita de 'expiry' para datetime.
+                # Credentials.from_authorized_user_info espera 'expiry' como string ISO 8601.
+                # if 'expiry' in session_data and session_data['expiry']:
+                #     session_data['expiry'] = safe_fromisoformat(session_data['expiry'])
                 
                 # Recria o objeto Credentials a partir dos dados salvos
+                # session_data já contém 'expiry' como string ISO 8601
                 creds = Credentials.from_authorized_user_info(session_data, self.SCOPES_USER)
                 
                 # Se as credenciais existirem, estiverem expiradas e tiverem um refresh_token, tenta refrescar
@@ -102,9 +103,9 @@ class AuthService:
             'client_secret': credentials.client_secret,
             'scopes': credentials.scopes,
             'universe_domain': credentials.universe_domain,
-            # NOVO: Salva expiry como string ISO 8601
+            # Salva expiry como string ISO 8601
             'expiry': credentials.expiry.isoformat() if credentials.expiry else None,
-            # NOVO: Salva id_token
+            # Salva id_token
             'id_token': credentials.id_token
         }
         self.auth_manager.save_session(creds_data)
@@ -125,9 +126,6 @@ class AuthService:
     def logout(self):
         """Remove o ficheiro de token, efetivamente fazendo logout."""
         self.auth_manager.clear_session() # Limpa a sessão salva
-        # Se você usava token.json, remova a linha abaixo
-        # if os.path.exists(self.TOKEN_FILE):
-        #     os.remove(self.TOKEN_FILE)
 
     def get_user_email(self, credentials):
         """Obtém o e-mail do utilizador autenticado."""
