@@ -1,31 +1,31 @@
-# Ambientes Virtuais
-venv/
-/venv/
-.venv/
+# Pastas de build e distribuição
+build/
+dist/
 __pycache__/
-*.py[cod]
-*$py.class
 
-# Ficheiros de IDEs e editores
-.vscode/
-.idea/
-*.swp
-*.swo
+# Ambiente virtual
+venv/
+.venv/
 
-# Ficheiros de sistema operativo
-.DS_Store
-Thumbs.db
-
-# Ficheiros de autenticação e tokens (IMPORTANTE)
-token.json
+# Credenciais e arquivos de sessão (MUITO IMPORTANTE!)
 client_secrets.json
+service_account.json
+token.json
+.regtel/
+session.auth
 
-# Ficheiros de log e de base de dados local (se aplicável)
+# Logs e arquivos temporários
 *.log
-*.db
-*.sqlite3
+*.tmp
+*.bak
+*.pyc
+*.pyo
+*.pyd
 
-# Ficheiros de distribuição do PyInstaller
-/dist/
-/build/
-*.spec
+# Arquivos de IDE (VS Code)
+.vscode/
+
+# Arquivos de instalador (se gerados na raiz do projeto)
+*.iss
+*.exe
+*.msi
