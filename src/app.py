@@ -113,9 +113,17 @@ class App(ctk.CTk):
         self.check_initial_login()
 
         # --- NOVO: Configurações de Atualização ---
-        self.CURRENT_APP_VERSION = "1.0.0" # ATUALIZE: Defina a versão atual da sua aplicação aqui
-        self.REMOTE_VERSION_URL = "https://raw.githubusercontent.com/seu_usuario/seu_repositorio/main/version.txt" # ATUALIZE: URL para o ficheiro version.txt
-        self.NEW_INSTALLER_DOWNLOAD_URL = "https://github.com/seu_usuario/seu_repositorio/releases/download/v1.0.1/REGTEL_Installer_1.0.1.exe" # ATUALIZE: URL para o novo instalador
+        self.CURRENT_APP_VERSION = "1.0.0" # ATUALIZE: Defina a versão atual da sua aplicação aqui (ex: "1.0.0")
+        
+        # ATUALIZE: URL para o ficheiro version.txt que contém a versão mais recente (ex: "1.0.1")
+        # IMPORTANTE: Este URL DEVE ser para um ficheiro RAW content de um REPOSITÓRIO PÚBLICO, SEM TOKENS.
+        # Exemplo: https://raw.githubusercontent.com/SeuUsuario/SeuRepositorio/main/updates/version.txt
+        self.REMOTE_VERSION_URL = "https://raw.githubusercontent.com/giovane-nobrega/REGTEL/refs/heads/master/updates/version.txt" # URL fornecida pelo utilizador
+        
+        # ATUALIZE: URL direta para o novo ficheiro do instalador (ex: REGTEL_Installer_1.0.1.exe)
+        # Este URL também deve ser público (ex: de um GitHub Release Asset).
+        # Exemplo: https://github.com/SeuUsuario/SeuRepositorio/releases/download/v1.0.1/REGTEL_Installer_1.0.1.exe
+        self.NEW_INSTALLER_DOWNLOAD_URL = "https://github.com/giovane-nobrega/craft-quest/releases/download/v1.0.1/REGTEL_Installer_1.0.1.exe" # AINDA UM EXEMPLO. SUBSTITUA PELA SUA URL REAL DO INSTALADOR!
 
         # Inicia a verificação de atualização em uma thread separada após um pequeno atraso
         self.after(2000, lambda: threading.Thread(target=self.check_for_updates, daemon=True).start())
@@ -223,7 +231,8 @@ class App(ctk.CTk):
             self.load_secondary_data()
 
             main_menu = self.frames["MainMenuView"]
-            main_menu.update_user_info(self.user_email, self.user_profile)
+            # Passa a versão da aplicação para o MainMenuView
+            main_menu.update_user_info(self.user_email, self.user_profile, self.CURRENT_APP_VERSION) # CORRIGIDO: Passando self.CURRENT_APP_VERSION
 
             if main_group == "67_TELECOM" and sub_group == "SUPER_ADMIN":
                 self.show_frame("AdminDashboardView")
