@@ -4,8 +4,7 @@
 #            Exibe botões de ação dinamicamente com base no perfil do utilizador logado.
 # ==============================================================================
 
-import customtkinter as ctk # Biblioteca CustomTkinter para interface gráfica
-from builtins import super # CORRIGIDO: Importa 'super' explicitamente para satisfazer o Pylance
+import customtkinter as ctk
 
 class MainMenuView(ctk.CTkFrame):
     """
