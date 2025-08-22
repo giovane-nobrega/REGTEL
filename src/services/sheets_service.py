@@ -142,7 +142,7 @@ class SheetsService:
                 media = MediaFileUpload(file_path, resumable=True) # Prepara o ficheiro para upload resumível
                 file = drive_service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
                 
-                # Torna o ficheiro publicamente acessível (qualquer uno pode ler)
+                # Torna o ficheiro publicamente acessível (qualquer um pode ler)
                 drive_service.permissions().create(fileId=file.get('id'), body={'role': 'reader', 'type': 'anyone'}).execute()
                 uploaded_file_links.append(file.get('webViewLink')) # Adiciona o link de visualização
 
@@ -555,7 +555,7 @@ class SheetsService:
         if not ws: return bool(False), f"Falha ao aceder à planilha {sheet_name}." # Usando bool explicitamente
 
         try:
-            cell = ws.find(occurrence_id, in_column=1) # Encontra a célula com o ID da ocorrência
+            cell = ws.find(occurrence_id, in_column=1) # Encontra a célula com o ID do comentário (coluna 2)
             if cell:
                 ws.update_cell(cell.row, 6, new_status) # Atualiza a célula na coluna 6 (Comentario)
                 return bool(True), "Status atualizado com sucesso." # Usando bool explicitamente

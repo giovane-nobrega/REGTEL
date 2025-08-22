@@ -11,24 +11,47 @@ import sys
 import requests # NOVO: Para fazer requisições HTTP para verificar a versão
 import subprocess # NOVO: Para executar o script de atualização
 import time # NOVO: Para pausas no processo de atualização
+from builtins import super, print, Exception, hasattr, len, max, range, int, str, dict, open # CORRIGIDO: Importa built-ins explicitamente para satisfazer o Pylance
 
 # Importações dos módulos de serviço e das views
-from services.auth_service import AuthService
-from services.sheets_service import SheetsService
-from views.access_views import RequestAccessView, PendingApprovalView
-from views.admin_dashboard_view import AdminDashboardView
-from views.equipment_view import EquipmentView
-from views.history_view import HistoryView
-from views.login_view import LoginView
-from views.main_menu_view import MainMenuView
-from views.occurrence_detail_view import OccurrenceDetailView
-from views.registration_view import RegistrationView
-from views.simple_call_view import SimpleCallView
-from views.notification_popup import NotificationPopup
+from services.auth_service import AuthService # Importado explicitamente
+from services.sheets_service import SheetsService # Importado explicitamente
+from views.access_views import RequestAccessView, PendingApprovalView # Importado explicitamente
+from views.admin_dashboard_view import AdminDashboardView # Importado explicitamente
+from views.equipment_view import EquipmentView # Importado explicitamente
+from views.history_view import HistoryView # Importado explicitamente
+from views.login_view import LoginView # Importado explicitamente
+from views.main_menu_view import MainMenuView # Importado explicitamente
+from views.occurrence_detail_view import OccurrenceDetailView # Importado explicitamente
+from views.registration_view import RegistrationView # Importado explicitamente
+from views.simple_call_view import SimpleCallView # Importado explicitamente
+from views.notification_popup import NotificationPopup # Importado explicitamente
 
 
 class App(ctk.CTk):
     def __init__(self):
+        # --- Configuração do Logging para capturar saída de print ---
+        # Define o diretório para salvar os logs (AppData\Local\REGTEL_Logs no Windows)
+        log_dir = os.path.join(os.path.expanduser("~"), "AppData", "Local", "REGTEL_Logs")
+        os.makedirs(log_dir, exist_ok=True) # Cria o diretório se não existir
+        self.log_file_path = os.path.join(log_dir, "app_debug.log")
+
+        # Abre o ficheiro de log em modo de escrita, com encoding UTF-8.
+        # Redireciona sys.stdout e sys.stderr para este ficheiro.
+        try:
+            self._log_file = open(self.log_file_path, 'w', encoding='utf-8')
+            sys.stdout = self._log_file
+            sys.stderr = self._log_file
+            print(f"--- REGTEL Debug Log Iniciado em: {self.log_file_path} ---")
+        except Exception as e:
+            # Se não conseguir abrir o log, imprime no console original (se houver)
+            # e exibe uma messagebox para o utilizador.
+            sys.stdout = sys.__stdout__ # Restaura stdout para o original
+            sys.stderr = sys.__stderr__ # Restaura stderr para o original
+            print(f"ERRO: Não foi possível iniciar o log para o ficheiro: {self.log_file_path}. Detalhes: {e}")
+            messagebox.showerror("Erro de Log", f"Não foi possível iniciar o log da aplicação. Detalhes: {e}")
+
+        # Inicializa a classe pai CustomTkinter
         super().__init__()
         self.title("Plataforma de Registro de Ocorrências (REGTEL)") # Nome do programa atualizado para REGTEL
         self.geometry("900x750")
@@ -113,9 +136,15 @@ class App(ctk.CTk):
         self.check_initial_login()
 
         # --- NOVO: Configurações de Atualização ---
-        self.CURRENT_APP_VERSION = "1.0.0" # ATUALIZE: Defina a versão atual da sua aplicação aqui
-        self.REMOTE_VERSION_URL = "https://raw.githubusercontent.com/seu_usuario/seu_repositorio/main/version.txt" # ATUALIZE: URL para o ficheiro version.txt
-        self.NEW_INSTALLER_DOWNLOAD_URL = "https://github.com/seu_usuario/seu_repositorio/releases/download/v1.0.1/REGTEL_Installer_1.0.1.exe" # ATUALIZE: URL para o novo instalador
+        self.CURRENT_APP_VERSION = "1.0.2" # Versão atual da sua aplicação
+        
+        # URL para o ficheiro version.txt que contém a versão mais recente (ex: "1.0.2")
+        # IMPORTANTE: Este URL DEVE ser para um ficheiro RAW content de um REPOSITÓRIO PÚBLICO, SEM TOKENS.
+        self.REMOTE_VERSION_URL = "https://raw.githubusercontent.com/giovane-nobrega/REGTEL/master/updates/version.txt" # URL fornecida pelo utilizador
+        
+        # URL direta para o novo ficheiro do instalador (ex: REGTEL_Installer_1.0.2.exe)
+        # Este URL também deve ser público (ex: de um GitHub Release Asset).
+        self.NEW_INSTALLER_DOWNLOAD_URL = "https://github.com/giovane-nobrega/REGTEL/releases/download/v1.0.2/REGTEL_Installer_1.0.2.exe" # Exemplo de URL de Release do seu repositório
 
         # Inicia a verificação de atualização em uma thread separada após um pequeno atraso
         self.after(2000, lambda: threading.Thread(target=self.check_for_updates, daemon=True).start())
@@ -223,7 +252,8 @@ class App(ctk.CTk):
             self.load_secondary_data()
 
             main_menu = self.frames["MainMenuView"]
-            main_menu.update_user_info(self.user_email, self.user_profile)
+            # Passa a versão da aplicação para o MainMenuView
+            main_menu.update_user_info(self.user_email, self.user_profile, self.CURRENT_APP_VERSION) # Passando self.CURRENT_APP_VERSION
 
             if main_group == "67_TELECOM" and sub_group == "SUPER_ADMIN":
                 self.show_frame("AdminDashboardView")
@@ -522,4 +552,3 @@ class App(ctk.CTk):
         except Exception as e:
             messagebox.showerror("Erro de Atualização", f"Não foi possível iniciar o processo de atualização: {e}")
             print(f"REGTEL: Erro ao iniciar o updater: {e}")
-

@@ -5,3 +5,4 @@ gspread
 matplotlib
 cryptography
 pytz
+pyinstaller
