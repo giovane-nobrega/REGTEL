@@ -383,7 +383,8 @@ class RequestAccessView(ctk.CTkFrame):
                 "GMN TELECOM": "GMN_USER"
             }
             company_name = self.company_combobox.get() # Empresa é a selecionada no combobox
-            sub_group = partner_subgroup_map.get(company_name, "USER") # Pega o subgrupo mapeado, ou "USER" como fallback
+            # ATUALIZAÇÃO: Usa o mapeamento para definir o sub_group específico da empresa parceira.
+            sub_group = partner_subgroup_map.get(company_name, "USER") 
         elif main_group == "PREFEITURA":
             sub_group = "PREFEITURA_USER" # Prefeitura deve ter subgrupo "PREFEITURA_USER"
             company_name = self.company_combobox.get() # Empresa/Departamento é a selecionada no combobox

@@ -143,6 +143,8 @@ class SheetsService:
                 file = drive_service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
                 
                 # Torna o ficheiro publicamente acessível (qualquer um pode ler)
+                # ATENÇÃO: Reavalie esta permissão se os anexos puderem conter dados sensíveis.
+                # Se o acesso público não for estritamente necessário, remova esta linha ou restrinja o acesso.
                 drive_service.permissions().create(fileId=file.get('id'), body={'role': 'reader', 'type': 'anyone'}).execute()
                 uploaded_file_links.append(file.get('webViewLink')) # Adiciona o link de visualização
 
@@ -344,11 +346,12 @@ class SheetsService:
             print("DEBUG: Utilizador não aprovado ou perfil não encontrado. Retornando lista vazia.") # Usando print explicitamente
             return list() # Usando list explicitamente
 
-        main_group = user_profile.get("main_group")
-        user_company = user_profile.get("company", "").strip().upper() # Normaliza a empresa do utilizador
+        main_group = user_profile.get("main_group", "").strip().upper()
+        user_company = user_profile.get("company", "").strip().upper()
         user_sub_group = user_profile.get("sub_group", "").strip().upper() # Pega o subgrupo do utilizador
 
         all_occurrences = self.get_all_occurrences() # Obtém TODAS as ocorrências
+        filtered_list = list() # Lista para armazenar as ocorrências filtradas
 
         print(f"DEBUG: Grupo Principal: {main_group}, Subgrupo do Utilizador: '{user_sub_group}', Empresa do Utilizador: '{user_company}'") # Usando print explicitamente
         print(f"DEBUG: Total de ocorrências carregadas (antes do filtro): {len(all_occurrences)}") # Usando print e len explicitamente
@@ -360,43 +363,64 @@ class SheetsService:
             print("DEBUG: Grupo 67_TELECOM detectado. Retornando TODAS as ocorrências.") # Usando print explicitamente
             return all_occurrences
 
-        # Parceiros veem apenas ocorrências da sua empresa específica.
+        # Parceiros:
+        # 1. Não devem ver ocorrências de equipamento.
+        # 2. Não devem ver ocorrências de chamada simples.
+        # 3. Devem ver ocorrências de chamada detalhada (CALL) onde a 'Registrador Company' corresponde à sua 'user_company'.
         elif main_group == 'PARTNER':
             if not user_company:
                 print(f"AVISO: Utilizador {user_email} do grupo {main_group} não tem empresa definida. Retornando lista vazia.") # Usando print explicitamente
                 return list() # Usando list explicitamente
             
-            filtered_list = list() # Usando list explicitamente
             for occ in all_occurrences:
-                occ_registrador_main_group = occ.get('Registrador Main Group', '').strip().upper()
-                occ_registrador_company = occ.get('Registrador Company', '').strip().upper() # Normaliza a empresa do registrador da ocorrência
-                
-                # --- DEBUG: Detalhes da Ocorrência durante o Filtro (Partner) ---
-                print(f"DEBUG: Ocorrência ID: {occ.get('ID', 'N/A')}, Registrador Main Group: '{occ_registrador_main_group}', Registrador Company: '{occ_registrador_company}', User Company (Partner): '{user_company}'") # Usando print explicitamente
-                # ----------------------------------------------------
-                
-                # Ocorrências de parceiros são filtradas estritamente pela sua empresa.
-                # Apenas ocorrências cujo Registrador Main Group é 'PARTNER' e a empresa corresponde.
-                if occ_registrador_main_group == 'PARTNER' and occ_registrador_company == user_company:
+                occurrence_id = occ.get('ID', '').strip().upper()
+                occ_registrador_company = occ.get('Registrador Company', '').strip().upper()
+
+                # Excluir ocorrências de equipamento para utilizadores PARTNER
+                if 'EQUIP' in occurrence_id:
+                    print(f"DEBUG PARTNER: Excluindo ocorrência de equipamento ID: {occurrence_id}")
+                    continue # Pula esta ocorrência
+
+                # Excluir ocorrências de chamada simples para utilizadores PARTNER
+                if 'SCALL' in occurrence_id:
+                    print(f"DEBUG PARTNER: Excluindo ocorrência de chamada simples ID: {occurrence_id}")
+                    continue # Pula esta ocorrência
+
+                # Incluir ocorrências de chamada detalhada (CALL) se a empresa corresponder
+                if 'CALL' in occurrence_id and occ_registrador_company == user_company:
                     filtered_list.append(occ)
+                    print(f"DEBUG PARTNER: Incluindo ocorrência detalhada ID: {occurrence_id} (Empresa Registradora: {occ_registrador_company} == Empresa do Usuário: {user_company})")
                 else:
-                    print(f"DEBUG: Ocorrência ID: {occ.get('ID', 'N/A')} NÃO incluída para PARTNER (Registrador Main Group: '{occ_registrador_main_group}', Registrador Company: '{occ_registrador_company}' != User Company: '{user_company}')") # Usando print explicitamente
-            
-            print(f"DEBUG: Grupo '{main_group}' detectado. Filtrando por empresa '{user_company}'. Ocorrências filtradas: {len(filtered_list)}") # Usando print e len explicitamente
+                    print(f"DEBUG PARTNER: Excluindo ocorrência ID: {occurrence_id} (Não é CALL ou empresa não corresponde)")
+
+            print(f"DEBUG: Grupo '{main_group}' detectado. Filtrando por empresa '{user_company}', excluindo equipamentos e chamadas simples. Ocorrências filtradas: {len(filtered_list)}") # Usando print e len explicitamente
             return filtered_list
 
-        # Prefeitura veem todas as ocorrências do grupo "PREFEITURA".
+        # Prefeitura:
+        # 1. Devem ver todas as ocorrências onde o 'Registrador Main Group' é 'PREFEITURA' (qualquer tipo, incluindo SCALL e EQUIP).
+        # 2. Devem ver ocorrências de EQUIPAMENTO ('EQUIP') onde o 'Registrador Main Group' é '67_TELECOM'.
+        # 3. Devem ver ocorrências de CHAMADA SIMPLES ('SCALL') onde o 'Registrador Main Group' é '67_TELECOM'.
         elif main_group == 'PREFEITURA':
-            filtered_list = list() # Usando list explicitamente
             for occ in all_occurrences:
+                occurrence_id = occ.get('ID', '').strip().upper()
                 occ_registrador_main_group = occ.get('Registrador Main Group', '').strip().upper()
-                # Para a Prefeitura, basta que o main group da ocorrência seja 'PREFEITURA'.
+
+                # Incluir ocorrências registadas por utilizadores PREFEITURA (qualquer tipo)
                 if occ_registrador_main_group == 'PREFEITURA':
                     filtered_list.append(occ)
+                    print(f"DEBUG PREFEITURA: Incluindo ocorrência ID: {occurrence_id} (Registrador Main Group: {occ_registrador_main_group})")
+                # Incluir ocorrências de EQUIPAMENTO registadas por utilizadores 67_TELECOM
+                elif 'EQUIP' in occurrence_id and occ_registrador_main_group == '67_TELECOM':
+                    filtered_list.append(occ)
+                    print(f"DEBUG PREFEITURA: Incluindo ocorrência de equipamento ID: {occurrence_id} (Registrador Main Group: {occ_registrador_main_group})")
+                # Incluir ocorrências de CHAMADA SIMPLES registadas por utilizadores 67_TELECOM
+                elif 'SCALL' in occurrence_id and occ_registrador_main_group == '67_TELECOM':
+                    filtered_list.append(occ)
+                    print(f"DEBUG PREFEITURA: Incluindo ocorrência de chamada simples ID: {occurrence_id} (Registrador Main Group: {occ_registrador_main_group})")
                 else:
-                    print(f"DEBUG: Ocorrência ID: {occ.get('ID', 'N/A')} NÃO incluída para PREFEITURA (Registrador Main Group: '{occ_registrador_main_group}')") # Usando print explicitamente
+                    print(f"DEBUG PREFEITURA: Excluindo ocorrência ID: {occurrence_id} (Não corresponde às regras da Prefeitura)")
 
-            print(f"DEBUG: Grupo '{main_group}' detectado. Retornando todas as ocorrências da Prefeitura. Ocorrências filtradas: {len(filtered_list)}") # Usando print e len explicitamente
+            print(f"DEBUG: Grupo '{main_group}' detectado. Ocorrências filtradas: {len(filtered_list)}") # Usando print e len explicitamente
             return filtered_list
 
         print(f"DEBUG: Perfil '{main_group}' não mapeado para regras de visualização. Retornando lista vazia.") # Usando print explicitamente
@@ -557,14 +581,14 @@ class SheetsService:
         try:
             cell = ws.find(occurrence_id, in_column=1) # Encontra a célula com o ID do comentário (coluna 2)
             if cell:
-                ws.update_cell(cell.row, 6, new_status) # Atualiza a célula na coluna 6 (Comentario)
+                ws.update_cell(cell.row, status_col, new_status) # Atualiza a célula na coluna correta (status_col)
                 return bool(True), "Status atualizado com sucesso." # Usando bool explicitamente
             else:
                 return bool(False), f"Ocorrência {occurrence_id} não encontrada." # Usando bool explicitamente
         except gspread.exceptions.CellNotFound:
             return bool(False), f"Ocorrência com ID {occurrence_id} não encontrada na planilha {sheet_name}." # Usando bool explicitamente
         except Exception as e:
-            return bool(False), f"Erro ao atualizar o comentário {occurrence_id}: {e}" # Usando bool explicitamente
+            return bool(False), f"Erro ao atualizar o status da ocorrência {occurrence_id}: {e}" # Usando bool explicitamente
 
     def register_simple_call_occurrence(self, user_email, data):
         """
@@ -773,3 +797,4 @@ class SheetsService:
         except Exception as e:
             print(f"Erro ao obter comentários da ocorrência {occurrence_id}: {e}") # Usando print explicitamente
             return list() # Usando list explicitamente
+

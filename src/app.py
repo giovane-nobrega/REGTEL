@@ -299,8 +299,15 @@ class App(ctk.CTk):
                 messagebox.showerror("Erro ao Enviar Solicitação", f"Não foi possível enviar sua solicitação de acesso: {message}\nPor favor, verifique seus dados e tente novamente.")
 
     def get_all_occurrences(self, force_refresh=False):
+        """
+        Obtém as ocorrências visíveis para o utilizador logado,
+        filtrando com base no seu perfil.
+        :param force_refresh: Se True, força o recarregamento dos dados do Google Sheets.
+        :return: Lista de ocorrências filtradas.
+        """
         if force_refresh or self.occurrences_cache is None:
-            self.occurrences_cache = self.sheets_service.get_all_occurrences()
+            # Chama a função de filtragem por utilizador do SheetsService
+            self.occurrences_cache = self.sheets_service.get_occurrences_by_user(self.user_email)
         return self.occurrences_cache
 
     def get_all_users(self, force_refresh=False):
@@ -361,7 +368,9 @@ class App(ctk.CTk):
             messagebox.showerror("Erro ao Salvar", f"Ocorreu um erro ao atualizar os perfis: {message}")
 
     def get_user_occurrences(self):
-        return self.sheets_service.get_occurrences_by_user(self.user_email)
+        # Este método agora é redundante, pois get_all_occurrences já faz a filtragem por usuário.
+        # No entanto, se for chamado, deve retornar o cache filtrado.
+        return self.get_all_occurrences()
 
     def get_current_user_profile(self):
         # Sempre busca o perfil mais recente para garantir permissões atualizadas
@@ -552,3 +561,4 @@ class App(ctk.CTk):
         except Exception as e:
             messagebox.showerror("Erro de Atualização", f"Não foi possível iniciar o processo de atualização: {e}")
             print(f"REGTEL: Erro ao iniciar o updater: {e}")
+

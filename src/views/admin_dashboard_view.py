@@ -11,6 +11,7 @@ import threading
 import json
 from datetime import datetime # Importação adicionada para validação de data
 import re # Importação adicionada para validação de data
+from builtins import super, list, Exception, print, str # CORRIGIDO: Importa built-ins explicitamente para satisfazer o Pylance
 
 class AdminDashboardView(ctk.CTkFrame):
     """Dashboard de gestão para administradores, organizado em abas."""
@@ -20,6 +21,7 @@ class AdminDashboardView(ctk.CTkFrame):
 
         self.configure(fg_color=self.controller.BASE_COLOR)
 
+        # Garantir que o frame principal expanda
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
@@ -28,8 +30,20 @@ class AdminDashboardView(ctk.CTkFrame):
         self.original_profiles = {}
         self.profile_updaters = {}
 
-        self.partner_companies = ["M2 TELECOMUNICAÇÕES", "MDA FIBRA", "DISK SISTEMA TELECOM", "GMN TELECOM", "67 INTERNET"]
+        # CORREÇÃO 1: Remover "67 INTERNET" das empresas parceiras
+        self.partner_companies = ["M2 TELECOMUNICAÇÕES", "MDA FIBRA", "DISK SISTEMA TELECOM", "GMN TELECOM"]
         self.prefeitura_dept_list = ["SECRETARIA DE SAUDE", "SECRETARIA DE OBRAS", "DEPARTAMENTO DE TI", "GUARDA MUNICIPAL", "GABINETE DO PREFEITO", "OUTRO"]
+        
+        # CORREÇÃO 1: Remover "67 INTERNET" do mapeamento de subgrupos para parceiros
+        self.partner_subgroup_map = {
+            "MDA FIBRA": "MDA_USER",
+            "M2 TELECOMUNICAÇÕES": "M2_USER",
+            "DISK SISTEMA TELECOM": "DISK_USER",
+            "GMN TELECOM": "GMN_USER"
+        }
+        # Subgrupos para 67_TELECOM (visíveis no admin)
+        self.telecom_subgroups_for_admin = ["SUPER_ADMIN", "ADMIN", "MANAGER", "67_TELECOM_USER", "67_INTERNET_USER"]
+
 
         ctk.CTkLabel(self, text="Dashboard de Gestão",
                      font=ctk.CTkFont(size=24, weight="bold"),
@@ -45,9 +59,17 @@ class AdminDashboardView(ctk.CTkFrame):
                                       text_color=self.controller.TEXT_COLOR)
         self.tabview.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
 
+        # REMOVIDO: Acesso direto a atributos internos como _segmented_button e _tabview
+        # A configuração de expansão para o conteúdo das abas será feita nos métodos setup_X_tab.
+
         self.occurrences_tab = self.tabview.add("Ocorrências")
         self.access_tab = self.tabview.add("Gerenciar Acessos")
         self.users_tab = self.tabview.add("Gerenciar Usuários")
+
+        # Configurar expansão das abas (para que o conteúdo dentro delas possa expandir)
+        # Estes grid_rowconfigure e grid_columnconfigure devem ser para o conteúdo dentro da aba,
+        # e serão definidos nos métodos setup_X_tab.
+        # Removido daqui para evitar duplicação e garantir que são aplicados no momento certo.
 
         self._occurrences_tab_initialized = False
         self._access_tab_initialized = False
@@ -61,45 +83,79 @@ class AdminDashboardView(ctk.CTkFrame):
         back_button.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
 
     def on_show(self):
+        print("DEBUG: AdminDashboardView exibida. Inicializando abas...")
+        
+        # Inicializar todas as abas ao exibir o dashboard se ainda não o foram
         if not self._occurrences_tab_initialized:
             self.setup_occurrences_tab(self.occurrences_tab)
             self._occurrences_tab_initialized = True
-            self.all_occurrences_frame.configure(label_text="Carregando ocorrências...")
-            self.update_idletasks()
-            self.load_all_occurrences(force_refresh=True)
+        
+        if not self._access_tab_initialized:
+            self.setup_access_tab(self.access_tab)
+            self._access_tab_initialized = True
+        
+        if not self._users_tab_initialized:
+            self.setup_users_tab(self.users_tab)
+            self._users_tab_initialized = True
 
-        self.on_tab_change(self.tabview.get())
+        # Carregar dados para todas as abas (ou pelo menos iniciar o carregamento e definir mensagens)
+        # Assegurar que os frames scrollable existem antes de configurar o label_text
+        if hasattr(self, 'all_occurrences_frame'):
+            self.all_occurrences_frame.configure(label_text="Carregando ocorrências...")
+        if hasattr(self, 'pending_users_frame'):
+            self.pending_users_frame.configure(label_text="Carregando solicitações...")
+        if hasattr(self, 'all_users_frame'):
+            self.all_users_frame.configure(label_text="Carregando usuários...")
+        self.update_idletasks() # Força a atualização da UI para mostrar as mensagens de carregamento
+
+        # Iniciar o carregamento de dados para todas as abas em paralelo
+        self.load_all_occurrences(force_refresh=True)
+        self.load_access_requests()
+        self.load_all_users(force_refresh=True)
+
+        self.tabview.set("Ocorrências") # Focar na aba padrão
+        print("DEBUG: Inicialização de abas concluída e dados carregados.")
+
 
     def on_tab_change(self, selected_tab=None):
+        print(f"DEBUG: Aba alterada para: {selected_tab}")
         if selected_tab is None:
             selected_tab = self.tabview.get()
 
-        if selected_tab == "Ocorrências" and not self._occurrences_tab_initialized:
-            self.setup_occurrences_tab(self.occurrences_tab)
-            self._occurrences_tab_initialized = True
-            self.all_occurrences_frame.configure(label_text="Carregando ocorrências...")
+        # A lógica de on_tab_change agora pode ser mais simples, pois on_show já inicializa tudo
+        # Mas mantemos a chamada de load_X_requests/users para garantir que os dados sejam sempre os mais recentes
+        # quando o usuário troca de aba, mesmo que a aba já esteja inicializada.
+        if selected_tab == "Ocorrências":
+            if hasattr(self, 'all_occurrences_frame'):
+                self.all_occurrences_frame.configure(label_text="Carregando ocorrências...")
             self.update_idletasks()
             self.load_all_occurrences(force_refresh=True)
-        elif selected_tab == "Gerenciar Acessos" and not self._access_tab_initialized:
-            self.setup_access_tab(self.access_tab)
-            self._access_tab_initialized = True
-            self.pending_users_frame.configure(label_text="Carregando solicitações...")
+        elif selected_tab == "Gerenciar Acessos":
+            if hasattr(self, 'pending_users_frame'):
+                self.pending_users_frame.configure(label_text="Carregando solicitações...")
             self.update_idletasks()
             self.load_access_requests()
-        elif selected_tab == "Gerenciar Usuários" and not self._users_tab_initialized:
-            self.setup_users_tab(self.users_tab)
-            self._users_tab_initialized = True
-            self.all_users_frame.configure(label_text="Carregando usuários...")
+        elif selected_tab == "Gerenciar Usuários":
+            if hasattr(self, 'all_users_frame'):
+                self.all_users_frame.configure(label_text="Carregando usuários...")
             self.update_idletasks()
             self.load_all_users(force_refresh=True)
 
     def setup_occurrences_tab(self, tab):
-        ctk.CTkLabel(tab, text="Visão Geral de Todas as Ocorrências", text_color=self.controller.TEXT_COLOR).pack(pady=5)
+        print("DEBUG: Configurando aba de Ocorrências.")
+        # Configurar expansão da aba para o seu conteúdo
+        tab.grid_rowconfigure(0, weight=0) # Título
+        tab.grid_rowconfigure(1, weight=0) # Frame de Filtros
+        tab.grid_rowconfigure(2, weight=1) # all_occurrences_frame (Scrollable Frame)
+        tab.grid_rowconfigure(3, weight=0) # Botões de ação
+        tab.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(tab, text="Visão Geral de Todas as Ocorrências", text_color=self.controller.TEXT_COLOR).grid(row=0, column=0, pady=5, sticky="w")
 
         # Frame de Filtros e Busca (similar ao HistoryView)
         filter_frame = ctk.CTkFrame(tab, fg_color="gray15")
-        filter_frame.pack(fill="x", pady=(0, 10), padx=5)
-        filter_frame.grid_columnconfigure((1, 2, 3), weight=1) # Ajuste conforme layout
+        filter_frame.grid(row=1, column=0, fill="x", pady=(0, 10), padx=5)
+        filter_frame.grid_columnconfigure((0, 1, 2, 3), weight=1) # Ajuste conforme layout
 
         ctk.CTkLabel(filter_frame, text="Painel de Filtros",
                      font=ctk.CTkFont(size=14, weight="bold"),
@@ -176,11 +232,11 @@ class AdminDashboardView(ctk.CTkFrame):
         self.all_occurrences_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando...",
                                                            fg_color="gray10",
                                                            label_text_color=self.controller.TEXT_COLOR)
-        self.all_occurrences_frame.pack(fill="both", expand=True, pady=5, padx=5)
+        self.all_occurrences_frame.grid(row=2, column=0, fill="both", expand=True, pady=5, padx=5)
 
         # Frame inferior, agora sem o botão "Ir para Histórico"
         button_frame = ctk.CTkFrame(tab, fg_color="transparent")
-        button_frame.pack(fill="x", pady=5, padx=5)
+        button_frame.grid(row=3, column=0, fill="x", pady=5, padx=5)
         button_frame.grid_columnconfigure((0, 1), weight=1) # Ajustado para 2 colunas
 
         ctk.CTkButton(button_frame, text="Salvar Alterações de Status", command=self.save_status_changes,
@@ -193,249 +249,25 @@ class AdminDashboardView(ctk.CTkFrame):
 
 
     def setup_access_tab(self, tab):
-        ctk.CTkLabel(tab, text="Gerenciar Solicitações de Acesso", text_color=self.controller.TEXT_COLOR).pack(pady=5)
-        self.pending_users_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando solicitações...",
-                                                         fg_color="gray10",
-                                                         label_text_color=self.controller.TEXT_COLOR)
-        self.pending_users_frame.pack(fill="both", expand=True, pady=5, padx=5)
+        print("DEBUG: Configurando aba de Gerenciar Acessos.")
+        # Configurar expansão da aba para o seu conteúdo
+        tab.grid_rowconfigure(0, weight=0) # Título
+        tab.grid_rowconfigure(1, weight=1) # pending_users_frame (Scrollable Frame)
+        tab.grid_rowconfigure(2, weight=0) # Botão de atualizar
+        tab.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkButton(tab, text="Atualizar Solicitações", command=self.load_access_requests,
-                      fg_color=self.controller.GRAY_BUTTON_COLOR, text_color=self.controller.TEXT_COLOR,
-                      hover_color=self.controller.GRAY_HOVER_COLOR).pack(pady=10)
-
-    def setup_users_tab(self, tab):
-        ctk.CTkLabel(tab, text="Gerenciar Perfis de Usuários", text_color=self.controller.TEXT_COLOR).pack(pady=5)
-
-        # Frame de busca e filtros para usuários
-        user_filter_frame = ctk.CTkFrame(tab, fg_color="gray15")
-        user_filter_frame.pack(fill="x", pady=(0, 10), padx=5)
-        user_filter_frame.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(user_filter_frame, text="Busca por Usuário:", text_color=self.controller.TEXT_COLOR).grid(row=0, column=0, sticky="w", padx=10, pady=(5, 0))
-        self.search_user_entry = ctk.CTkEntry(user_filter_frame, placeholder_text="Nome, e-mail ou username...",
-                                               fg_color="gray20", text_color=self.controller.TEXT_COLOR,
-                                               border_color="gray40")
-        self.search_user_entry.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 10))
-        self.search_user_entry.bind("<KeyRelease>", self.filter_users_admin)
-
-
-        self.all_users_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando usuários...",
-                                                      fg_color="gray10",
-                                                      label_text_color=self.controller.TEXT_COLOR)
-        self.all_users_frame.pack(fill="both", expand=True, pady=5, padx=5)
-
-        # Frame para os botões de ação na aba de Usuários
-        user_buttons_frame = ctk.CTkFrame(tab, fg_color="transparent")
-        user_buttons_frame.pack(fill="x", pady=5, padx=5)
-        user_buttons_frame.grid_columnconfigure((0, 1), weight=1) # Configura para duas colunas de peso igual
-
-        # Botão "Salvar Alterações de Perfil"
-        ctk.CTkButton(user_buttons_frame, text="Salvar Alterações de Perfil", command=self.save_profile_changes,
-                      fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
-                      hover_color=self.controller.ACCENT_COLOR).grid(row=0, column=0, padx=(0, 5), sticky="ew")
-
-        # Botão "Atualizar Lista de Usuários"
-        ctk.CTkButton(user_buttons_frame, text="Atualizar Lista de Usuários", command=lambda: self.load_all_users(force_refresh=True),
-                      fg_color=self.controller.GRAY_BUTTON_COLOR, text_color=self.controller.TEXT_COLOR,
-                      hover_color=self.controller.GRAY_HOVER_COLOR).grid(row=0, column=1, padx=(5, 0), sticky="ew")
-
-
-    def _validate_date_live_admin(self, widget, event=None, is_focus_out=False):
-        """
-        Valida e formata o formato da data em tempo real e quando o campo perde o foco.
-        """
-        date_str = widget.get()
-        # Se o campo estiver vazio, retorna para não validar
-        if not date_str:
-            widget.configure(border_color=self.default_border_color_admin)
-            return True
-
-        # Remove todos os caracteres que não sejam dígitos para processamento
-        digits = re.sub(r'[^\d]', '', date_str)
-        is_valid_format = False
-
-        if len(digits) == 8:
-            try:
-                # Tenta converter a string de 8 dígitos para um objeto datetime
-                # Assume o formato DDMMYYYY para digitação
-                date_obj = datetime.strptime(digits, "%d%m%Y")
-
-                # Formata de volta com hífens no formato DD-MM-AAAA
-                formatted_date = date_obj.strftime("%d-%m-%Y")
-
-                # Se a formatação for bem-sucedida, atualiza o widget e a flag
-                widget.delete(0, 'end')
-                widget.insert(0, formatted_date)
-                is_valid_format = True
-
-            except ValueError:
-                # Se a conversão falhar (data inválida), marca como inválido
-                is_valid_format = False
-
-        # Validação final em caso de formato já com hífens
-        if len(date_str) == 10 and re.fullmatch(r"^\d{2}-\d{2}-\d{4}$", date_str):
-            try:
-                datetime.strptime(date_str, "%d-%m-%Y")
-                is_valid_format = True
-            except ValueError:
-                is_valid_format = False
-
-        # Aplica o feedback visual
-        if is_valid_format:
-            widget.configure(border_color=self.default_border_color_admin)
-        else:
-            widget.configure(border_color="red")
-
-        return is_valid_format
-
-    def clear_filters_admin(self):
-        """Reseta todos os campos de filtro para o estado padrão e re-aplica a filtragem."""
-        self.search_entry_admin.delete(0, "end")
-        self.status_filter_admin.set("TODOS")
-        self.type_filter_admin.set("TODOS")
-        self.start_date_entry_admin.delete(0, "end")
-        self.end_date_entry_admin.delete("0", "end")
-
-        self.start_date_entry_admin.configure(border_color=self.default_border_color_admin)
-        self.end_date_entry_admin.configure(border_color=self.default_border_color_admin)
-
-        self.load_all_occurrences(force_refresh=True) # Recarrega a lista completa de ativos
-
-    def filter_occurrences_admin(self):
-        """
-        Filtra a lista de ocorrências com base nos termos de busca e nos filtros selecionados.
-        Este método deve obter *todas* as ocorrências ativas do controller e aplicar os filtros na UI.
-        """
-        # Valida os campos de data antes de prosseguir com a filtragem completa
-        start_date_valid = self._validate_date_live_admin(self.start_date_entry_admin, is_focus_out=True)
-        end_date_valid = self._validate_date_live_admin(self.end_date_entry_admin, is_focus_out=True)
-
-        if not start_date_valid or not end_date_valid:
-            messagebox.showwarning("Formato de Data Inválido", "Por favor, corrija o formato das datas (DD-MM-AAAA) antes de aplicar os filtros.")
-            return
-
-        search_term = self.search_entry_admin.get().lower()
-        selected_status = self.status_filter_admin.get().upper()
-        selected_type = self.type_filter_admin.get().upper()
-
-        start_date_str = self.start_date_entry_admin.get()
-        end_date_str = self.end_date_entry_admin.get()
-
-        # Obter a lista de ocorrências ativas do controller (já filtradas por status resolvido/cancelado)
-        all_active_occurrences = self.controller.sheets_service.get_active_occurrences_for_admin_dashboard()
-
-        filtered_list = all_active_occurrences
-
-        # 1. Filtrar por termo de busca
-        if search_term:
-            filtered_list = [
-                occ for occ in filtered_list
-                if any(search_term in str(v).lower() for v in occ.values())
-            ]
-
-        # 2. Filtrar por status (além do que já foi feito na camada de serviço, para filtros adicionais do usuário)
-        if selected_status != "TODOS":
-            filtered_list = [
-                occ for occ in filtered_list
-                if occ.get('Status', '').upper() == selected_status
-            ]
-
-        # 3. Filtrar por tipo de ocorrência
-        if selected_type != "TODOS":
-            if selected_type == "CHAMADA":
-                filtered_list = [occ for occ in filtered_list if 'CALL' in occ.get('ID', '') and 'SCALL' not in occ.get('ID', '')]
-            elif selected_type == "CHAMADA SIMPLES":
-                filtered_list = [occ for occ in filtered_list if 'SCALL' in occ.get('ID', '')]
-            elif selected_type == "EQUIPAMENTO":
-                filtered_list = [occ for occ in filtered_list if 'EQUIP' in occ.get('ID', '')]
-
-        # 4. Filtrar por intervalo de datas
-        if start_date_str or end_date_str:
-            try:
-                start_date = datetime.strptime(start_date_str, "%d-%m-%Y") if start_date_str else datetime.min
-                end_date = datetime.strptime(end_date_str, "%d-%m-%Y").replace(hour=23, minute=59, second=59) if end_date_str else datetime.max
-
-                filtered_list = [
-                    occ for occ in filtered_list
-                    if 'Data de Registro' in occ and \
-                       start_date <= datetime.strptime(occ['Data de Registro'].split(' ')[0], "%Y-%m-%d") <= end_date
-                ]
-
-            except ValueError:
-                messagebox.showwarning("Formato de Data Inválido", "Ocorreu um erro inesperado na validação da data. Por favor, verifique o formato DD-MM-AAAA.")
-                return
-
-        self._populate_all_occurrences(filtered_list) # Repopula com a lista filtrada
-
-
-    def load_all_occurrences(self, force_refresh=False):
-        # Altere esta linha para chamar o novo método
-        if force_refresh:
-            occurrences_to_load = self.controller.sheets_service.get_active_occurrences_for_admin_dashboard()
-        else:
-            occurrences_to_load = self.controller.sheets_service.get_active_occurrences_for_admin_dashboard()
-
-        threading.Thread(target=lambda: self.after(0, self._populate_all_occurrences, occurrences_to_load), daemon=True).start()
-
-    def _populate_all_occurrences(self, all_occurrences_list):
-        self.status_updaters.clear()
-        self.original_statuses.clear()
-        for widget in self.all_occurrences_frame.winfo_children(): widget.destroy()
-        if not all_occurrences_list:
-            self.all_occurrences_frame.configure(label_text="Nenhuma ocorrência encontrada.")
-            return
-        self.all_occurrences_frame.configure(label_text="")
-        status_options = ["REGISTRADO", "EM ANÁLISE", "AGUARDANDO TERCEIROS", "PARCIALMENTE RESOLVIDO", "RESOLVIDO", "CANCELADO"]
-        for item in all_occurrences_list:
-            item_id = item.get('ID', 'N/A')
-            self.original_statuses[item_id] = item.get('Status', 'N/A')
-            card = ctk.CTkFrame(self.all_occurrences_frame, fg_color="gray20")
-            card.pack(fill="x", padx=5, pady=5)
-            card.grid_columnconfigure(0, weight=1)
-
-            info_frame = ctk.CTkFrame(card, fg_color="transparent")
-            info_frame.grid(row=0, column=0, sticky="w", padx=10, pady=5)
-            title = item.get('Título da Ocorrência', 'Ocorrência sem Título')
-
-            ctk.CTkLabel(info_frame, text=f"ID: {item_id} - {title}",
-                         font=ctk.CTkFont(size=14, weight="bold"), anchor="w",
-                         text_color=self.controller.TEXT_COLOR).pack(anchor="w")
-
-            ctk.CTkLabel(info_frame, text=f"Registrado por: {item.get('Nome do Registrador', 'N/A')} em {item.get('Data de Registro', 'N/A')}",
-                         anchor="w", text_color="gray60").pack(anchor="w")
-
-            controls_frame = ctk.CTkFrame(card, fg_color="transparent")
-            controls_frame.grid(row=0, column=1, sticky="e", padx=10, pady=5)
-
-            status_combo = ctk.CTkComboBox(controls_frame, values=status_options, width=180,
-                                           fg_color="gray20", text_color=self.controller.TEXT_COLOR,
-                                           border_color="gray40", button_color=self.controller.PRIMARY_COLOR,
-                                           button_hover_color=self.controller.ACCENT_COLOR)
-            status_combo.set(self.original_statuses[item_id])
-            status_combo.pack(side="left", padx=(0, 10))
-            self.status_updaters[item_id] = status_combo
-
-            ctk.CTkButton(controls_frame, text="Abrir", width=80,
-                          command=partial(self.controller.show_occurrence_details, item_id),
-                          fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
-                          hover_color=self.controller.ACCENT_COLOR).pack(side="left")
-
-    def save_status_changes(self):
-        changes = {occ_id: combo.get() for occ_id, combo in self.status_updaters.items() if self.original_statuses.get(occ_id) != combo.get()}
-        self.controller.save_occurrence_status_changes(changes)
-
-    def setup_access_tab(self, tab):
-        ctk.CTkLabel(tab, text="Solicitações de Acesso Pendentes", text_color=self.controller.TEXT_COLOR).pack(pady=5)
+        ctk.CTkLabel(tab, text="Solicitações de Acesso Pendentes", text_color=self.controller.TEXT_COLOR).grid(row=0, column=0, pady=5, sticky="w")
         self.pending_users_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando solicitações...",
                                                           fg_color="gray10",
                                                           label_text_color=self.controller.TEXT_COLOR)
-        self.pending_users_frame.pack(fill="both", expand=True, pady=5, padx=5)
+        self.pending_users_frame.grid(row=1, column=0, fill="both", expand=True, pady=5, padx=5)
 
         ctk.CTkButton(tab, text="Atualizar Lista", command=self.load_access_requests,
                       fg_color=self.controller.GRAY_BUTTON_COLOR, text_color=self.controller.TEXT_COLOR,
-                      hover_color=self.controller.GRAY_HOVER_COLOR).pack(pady=5, padx=5, fill="x")
+                      hover_color=self.controller.GRAY_HOVER_COLOR).grid(row=2, column=0, pady=5, padx=5, fill="x")
 
     def load_access_requests(self):
+        print("DEBUG: Carregando solicitações de acesso pendentes.")
         threading.Thread(target=lambda: self.after(0, self._populate_access_requests, self.controller.get_pending_requests()), daemon=True).start()
 
     def _populate_access_requests(self, pending_list):
@@ -472,7 +304,18 @@ class AdminDashboardView(ctk.CTkFrame):
         for email, widgets in self.profile_updaters.items():
             new_main = widgets['main_group'].get()
             new_sub = widgets['sub_group'].get()
-            new_comp = widgets['company'].get() if new_main in ['PARTNER', 'PREFEITURA'] or (new_main == '67_TELECOM' and new_sub == '67_INTERNET_USER') else ""
+            
+            # Lógica para determinar new_comp com base no main_group e sub_group
+            new_comp = ""
+            if new_main == 'PARTNER':
+                # Para parceiros, a empresa é a selecionada diretamente
+                new_comp = widgets['company'].get()
+            elif new_main == 'PREFEITURA':
+                # Para prefeitura, a empresa é a selecionada diretamente
+                new_comp = widgets['company'].get()
+            elif new_main == '67_TELECOM':
+                # CORREÇÃO 2: Para 67_TELECOM a empresa é SEMPRE TRR, independentemente do subgrupo
+                new_comp = "TRR"
 
             original = self.original_profiles.get(email, {})
             if original.get('main_group') != new_main or original.get('sub_group') != new_sub or original.get('company') != new_comp:
@@ -481,114 +324,226 @@ class AdminDashboardView(ctk.CTkFrame):
         self.controller.update_user_profile(changes)
 
     def setup_users_tab(self, tab):
-        ctk.CTkLabel(tab, text="Lista de Todos os Usuários", text_color=self.controller.TEXT_COLOR).pack(pady=5)
-        self.all_users_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando...",
+        print("DEBUG: Configurando aba de Gerenciar Usuários.")
+        # Configurar expansão da aba para o seu conteúdo
+        tab.grid_rowconfigure(0, weight=0) # Título
+        tab.grid_rowconfigure(1, weight=0) # Frame de filtro
+        tab.grid_rowconfigure(2, weight=1) # all_users_frame (Scrollable Frame)
+        tab.grid_rowconfigure(3, weight=0) # Botões de ação
+        tab.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(tab, text="Lista de Todos os Usuários", text_color=self.controller.TEXT_COLOR).grid(row=0, column=0, pady=5, sticky="w")
+
+        # Frame de busca e filtros para usuários
+        user_filter_frame = ctk.CTkFrame(tab, fg_color="gray15")
+        user_filter_frame.grid(row=1, column=0, fill="x", pady=(0, 10), padx=5)
+        user_filter_frame.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(user_filter_frame, text="Busca por Usuário:", text_color=self.controller.TEXT_COLOR).grid(row=0, column=0, sticky="w", padx=10, pady=(5, 0))
+        self.search_user_entry = ctk.CTkEntry(user_filter_frame, placeholder_text="Nome, e-mail ou username...",
+                                               fg_color="gray20", text_color=self.controller.TEXT_COLOR,
+                                               border_color="gray40")
+        self.search_user_entry.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 10))
+        self.search_user_entry.bind("<KeyRelease>", self.filter_users_admin)
+
+
+        self.all_users_frame = ctk.CTkScrollableFrame(tab, label_text="Carregando usuários...",
                                                       fg_color="gray10",
                                                       label_text_color=self.controller.TEXT_COLOR)
-        self.all_users_frame.pack(fill="both", expand=True, pady=5, padx=5)
-        button_frame = ctk.CTkFrame(tab, fg_color="transparent")
-        button_frame.pack(fill="x", pady=5, padx=5)
+        self.all_users_frame.grid(row=2, column=0, fill="both", expand=True, pady=5, padx=5)
 
-        ctk.CTkButton(button_frame, text="Salvar Alterações de Perfil", command=self.save_profile_changes,
+        # Frame para os botões de ação na aba de Usuários
+        user_buttons_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        user_buttons_frame.grid(row=3, column=0, fill="x", pady=5, padx=5)
+        user_buttons_frame.grid_columnconfigure((0, 1), weight=1) # Configura para duas colunas de peso igual
+
+        # Botão "Salvar Alterações de Perfil"
+        ctk.CTkButton(user_buttons_frame, text="Salvar Alterações de Perfil", command=self.save_profile_changes,
                       fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
-                      hover_color=self.controller.ACCENT_COLOR).pack(side="left", padx=(0, 10), expand=True, fill="x")
+                      hover_color=self.controller.ACCENT_COLOR).grid(row=0, column=0, padx=(0, 5), sticky="ew")
 
-        ctk.CTkButton(button_frame, text="Atualizar Lista", command=lambda: self.load_all_users(force_refresh=True),
+        # Botão "Atualizar Lista de Usuários"
+        ctk.CTkButton(user_buttons_frame, text="Atualizar Lista de Usuários", command=lambda: self.load_all_users(force_refresh=True),
                       fg_color=self.controller.GRAY_BUTTON_COLOR, text_color=self.controller.TEXT_COLOR,
-                      hover_color=self.controller.GRAY_HOVER_COLOR).pack(side="left", expand=True, fill="x")
+                      hover_color=self.controller.GRAY_HOVER_COLOR).grid(row=0, column=1, padx=(5, 0), sticky="ew")
+
+    def filter_users_admin(self, event=None):
+        """
+        Filtra a lista de usuários exibida com base no termo de busca.
+        """
+        search_term = self.search_user_entry.get().lower()
+        all_users = self.controller.get_all_users() # Obtém todos os usuários (pode ser do cache)
+
+        if not search_term:
+            filtered_users = all_users
+        else:
+            filtered_users = [
+                user for user in all_users
+                if search_term in user.get('name', '').lower() or
+                   search_term in user.get('email', '').lower() or
+                   search_term in user.get('username', '').lower()
+            ]
+        self._populate_all_users(filtered_users)
+
 
     def load_all_users(self, force_refresh=False):
+        print("DEBUG: Carregando todos os usuários para o dashboard.")
+        # Carrega todos os usuários e os popula na UI.
         threading.Thread(target=lambda: self.after(0, self._populate_all_users, self.controller.get_all_users(force_refresh)), daemon=True).start()
 
     def _populate_all_users(self, all_users_list):
+        print("DEBUG: Populando lista de usuários na UI.")
         self.profile_updaters.clear()
         self.original_profiles.clear()
         for widget in self.all_users_frame.winfo_children(): widget.destroy()
         if not all_users_list:
-            self.all_users_frame.configure(label_text="Nenhuma usuário encontrado.")
+            self.all_users_frame.configure(label_text="Nenhum usuário encontrado.")
             return
         self.all_users_frame.configure(label_text="")
+        
         main_group_options = ["67_TELECOM", "PARTNER", "PREFEITURA"]
-        sub_group_options = ["SUPER_ADMIN", "ADMIN", "MANAGER", "USER", "67_INTERNET_USER"] # Adicionado o novo subgrupo
-
+        
         for user in all_users_list:
-            email = user.get('email')
-            self.original_profiles[email] = {'main_group': user.get('main_group'), 'sub_group': user.get('sub_group'), 'company': user.get('company')}
+            try: # Adicionado try-except para cada card de usuário
+                email = user.get('email', '') # Garante que email é uma string
+                # Pega os valores originais com fallback para string vazia
+                original_main_group = user.get('main_group', '')
+                original_sub_group = user.get('sub_group', '')
+                original_company = user.get('company', '')
 
-            card = ctk.CTkFrame(self.all_users_frame, fg_color="gray20")
-            card.pack(fill="x", pady=5)
-            card.grid_columnconfigure(0, weight=1)
+                self.original_profiles[email] = {
+                    'main_group': original_main_group,
+                    'sub_group': original_sub_group,
+                    'company': original_company
+                }
 
-            info_text = f"{user.get('name', 'N/A')} (@{user.get('username', 'N/A')})"
-            ctk.CTkLabel(card, text=info_text, anchor="w", text_color=self.controller.TEXT_COLOR).grid(row=0, column=0, padx=10, pady=5, sticky="w")
-            ctk.CTkLabel(card, text=email, anchor="w", text_color="gray60").grid(row=1, column=0, padx=10, pady=(0,5), sticky="w")
+                card = ctk.CTkFrame(self.all_users_frame, fg_color="gray20")
+                card.pack(fill="x", pady=5)
+                card.grid_columnconfigure(0, weight=1)
 
-            controls_frame = ctk.CTkFrame(card, fg_color="transparent")
-            # Configurar as colunas do controls_frame para usar grid
-            controls_frame.grid_columnconfigure((0, 1, 2), weight=1) # Permite que as colunas se expandam
-            controls_frame.grid_rowconfigure(0, weight=1) # Garante que a linha existe
-            controls_frame.grid(row=0, column=1, rowspan=2, padx=10, pady=5, sticky="nsew")
+                info_text = f"{user.get('name', 'N/A')} (@{user.get('username', 'N/A')})"
+                ctk.CTkLabel(card, text=info_text, anchor="w", text_color=self.controller.TEXT_COLOR).grid(row=0, column=0, padx=10, pady=5, sticky="w")
+                ctk.CTkLabel(card, text=email, anchor="w", text_color="gray60").grid(row=1, column=0, padx=10, pady=(0,5), sticky="w")
 
-            main_group_combo = ctk.CTkComboBox(controls_frame, values=main_group_options, width=140,
-                                               command=partial(self._on_main_group_change, email),
-                                               fg_color="gray20", text_color=self.controller.TEXT_COLOR,
-                                               border_color="gray40", button_color=self.controller.PRIMARY_COLOR,
-                                               button_hover_color=self.controller.ACCENT_COLOR)
-            main_group_combo.set(user.get('main_group'))
-            main_group_combo.grid(row=0, column=0, padx=(0, 5), sticky="ew") # Usar grid
+                controls_frame = ctk.CTkFrame(card, fg_color="transparent")
+                controls_frame.grid_columnconfigure((0, 1, 2), weight=1)
+                controls_frame.grid_rowconfigure(0, weight=1)
+                controls_frame.grid(row=0, column=1, rowspan=2, padx=10, pady=5, sticky="nsew")
 
-            sub_group_combo = ctk.CTkComboBox(controls_frame, values=sub_group_options, width=140,
-                                              fg_color="gray20", text_color=self.controller.TEXT_COLOR,
-                                              border_color="gray40", button_color=self.controller.PRIMARY_COLOR,
-                                              button_hover_color=self.controller.ACCENT_COLOR)
-            sub_group_combo.set(user.get('sub_group'))
-            sub_group_combo.grid(row=0, column=1, padx=(0, 5), sticky="ew") # Usar grid
+                main_group_combo = ctk.CTkComboBox(controls_frame, values=main_group_options, width=140,
+                                                   command=partial(self._on_main_group_change, email),
+                                                   fg_color="gray20", text_color=self.controller.TEXT_COLOR,
+                                                   border_color="gray40", button_color=self.controller.PRIMARY_COLOR,
+                                                   button_hover_color=self.controller.ACCENT_COLOR)
+                main_group_combo.set(original_main_group) # Define o valor original
+                main_group_combo.grid(row=0, column=0, padx=(0, 5), sticky="ew")
 
-            company_combo = ctk.CTkComboBox(controls_frame, values=[], width=180,
-                                            fg_color="gray20", text_color=self.controller.TEXT_COLOR,
-                                            border_color="gray40", button_color=self.controller.PRIMARY_COLOR,
-                                            button_hover_color=self.controller.ACCENT_COLOR)
-            company_combo.set(user.get('company', ''))
-            company_combo.grid(row=0, column=2, padx=(0, 5), sticky="ew") # Usar grid
+                sub_group_combo = ctk.CTkComboBox(controls_frame, values=[], width=140,
+                                                  command=partial(self._on_sub_group_change, email),
+                                                  fg_color="gray20", text_color=self.controller.TEXT_COLOR,
+                                                  border_color="gray40", button_color=self.controller.PRIMARY_COLOR,
+                                                  button_hover_color=self.controller.ACCENT_COLOR)
+                sub_group_combo.set(original_sub_group) # Define o valor original
+                sub_group_combo.grid(row=0, column=1, padx=(0, 5), sticky="ew")
 
-            self.profile_updaters[email] = {'main_group': main_group_combo, 'sub_group': sub_group_combo, 'company': company_combo}
-            self._on_main_group_change(email, user.get('main_group'))
+                company_combo = ctk.CTkComboBox(controls_frame, values=[], width=180,
+                                                fg_color="gray20", text_color=self.controller.TEXT_COLOR,
+                                                border_color="gray40", button_color=self.controller.PRIMARY_COLOR,
+                                                button_hover_color=self.controller.ACCENT_COLOR)
+                company_combo.set(original_company) # Define o valor original
+                company_combo.grid(row=0, column=2, padx=(0, 5), sticky="ew")
 
-    def _on_main_group_change(self, email, selected_group):
-        if self.profile_updaters.get(email, {}).get('company'):
-            company_widget = self.profile_updaters[email]['company']
-            sub_group_widget = self.profile_updaters[email]['sub_group'] # Obter o widget do subgrupo
+                self.profile_updaters[email] = {
+                    'main_group': main_group_combo,
+                    'sub_group': sub_group_combo,
+                    'company': company_combo
+                }
+                # Chama a função de mudança de grupo principal para inicializar os subgrupos e empresa
+                self._on_main_group_change(email, original_main_group, initial_load=True)
+            except Exception as e:
+                print(f"ERRO ao popular card de usuário para {user.get('email', 'N/A')}: {e}")
+                # Opcional: Adicionar um label de erro no scrollable frame para este card específico.
 
-            if selected_group == 'PARTNER':
-                company_widget.configure(values=self.partner_companies)
-                if company_widget.get() not in self.partner_companies:
-                    company_widget.set(self.partner_companies[0] if self.partner_companies else "")
-                company_widget.grid(row=0, column=2, padx=(0, 5), sticky="ew") # Usar grid
-            elif selected_group == 'PREFEITURA':
-                company_widget.configure(values=self.prefeitura_dept_list)
-                if company_widget.get() not in self.prefeitura_dept_list:
-                    company_widget.set(self.prefeitura_dept_list[0] if self.prefeitura_dept_list else "")
-                company_widget.grid(row=0, column=2, padx=(0, 5), sticky="ew") # Usar grid
-            elif selected_group == '67_TELECOM': # Se o grupo principal for 67_TELECOM
-                current_sub_group = sub_group_widget.get()
-                if current_sub_group == "67_INTERNET_USER":
-                    company_widget.configure(values=["67 INTERNET"]) # Força a empresa
-                    company_widget.set("67 INTERNET")
-                    company_widget.grid(row=0, column=2, padx=(0, 5), sticky="ew")
-                else:
-                    company_widget.grid_forget() # Esconde para outros subgrupos 67_TELECOM
-            else:
-                company_widget.grid_forget()
 
-    def save_profile_changes(self):
-        changes = {}
-        for email, widgets in self.profile_updaters.items():
-            new_main = widgets['main_group'].get()
-            new_sub = widgets['sub_group'].get()
-            new_comp = widgets['company'].get() if new_main in ['PARTNER', 'PREFEITURA'] or (new_main == '67_TELECOM' and new_sub == '67_INTERNET_USER') else ""
+    def _on_main_group_change(self, email, selected_main_group, initial_load=False):
+        """
+        Atualiza as opções do ComboBox de subgrupo e empresa/departamento
+        com base no grupo principal selecionado.
+        """
+        widgets = self.profile_updaters[email]
+        sub_group_combo = widgets['sub_group']
+        company_combo = widgets['company']
+        
+        # Garante que selected_main_group é uma string para evitar erros de None
+        selected_main_group = str(selected_main_group).strip().upper()
 
-            original = self.original_profiles.get(email, {})
-            if original.get('main_group') != new_main or original.get('sub_group') != new_sub or original.get('company') != new_comp:
-                changes[email] = {'main_group': new_main, 'sub_group': new_sub, 'company': new_comp}
+        # --- Atualiza as opções do ComboBox de Subgrupo ---
+        sub_group_options = []
+        if selected_main_group == 'PARTNER':
+            sub_group_options = list(self.partner_subgroup_map.values())
+            sub_group_combo.grid(row=0, column=1, padx=(0, 5), sticky="ew") # Garante que está visível
+        elif selected_main_group == 'PREFEITURA':
+            sub_group_options = ['PREFEITURA_USER']
+            sub_group_combo.grid(row=0, column=1, padx=(0, 5), sticky="ew") # Garante que está visível
+        elif selected_main_group == '67_TELECOM':
+            sub_group_options = self.telecom_subgroups_for_admin
+            sub_group_combo.grid(row=0, column=1, padx=(0, 5), sticky="ew") # Garante que está visível
+        else:
+            sub_group_combo.grid_forget() # Esconde o ComboBox de subgrupo
 
-        self.controller.update_user_profile(changes)
+        sub_group_combo.configure(values=sub_group_options)
+        
+        # Tenta definir o valor original ou o primeiro da lista, se disponível
+        if initial_load and self.original_profiles[email]['sub_group'] in sub_group_options:
+            sub_group_combo.set(self.original_profiles[email]['sub_group'])
+        elif sub_group_options:
+            sub_group_combo.set(sub_group_options[0])
+        else:
+            sub_group_combo.set("") # Limpa se não houver opções
+
+        # Chama a função de mudança de subgrupo para atualizar o ComboBox da empresa
+        # Passa initial_load para que a lógica de empresa também possa usar o valor original
+        self._on_sub_group_change(email, sub_group_combo.get(), initial_load=initial_load)
+
+
+    def _on_sub_group_change(self, email, selected_sub_group, initial_load=False):
+        """
+        Atualiza as opções do ComboBox de empresa/departamento
+        com base no grupo principal e subgrupo selecionados.
+        """
+        widgets = self.profile_updaters[email]
+        main_group_combo = widgets['main_group']
+        company_combo = widgets['company']
+        
+        # Garante que selected_main_group e selected_sub_group são strings
+        selected_main_group = str(main_group_combo.get()).strip().upper()
+        selected_sub_group = str(selected_sub_group).strip().upper()
+        
+        company_options = []
+        company_to_set = ""
+
+        if selected_main_group == 'PARTNER':
+            company_options = self.partner_companies
+            company_combo.grid(row=0, column=2, padx=(0, 5), sticky="ew")
+        elif selected_main_group == 'PREFEITURA':
+            company_options = self.prefeitura_dept_list
+            company_combo.grid(row=0, column=2, padx=(0, 5), sticky="ew")
+        elif selected_main_group == '67_TELECOM':
+            # CORREÇÃO 3: Sempre ocultar o combo e definir TRR, independentemente do subgrupo
+            company_combo.grid_forget() # Esconde a empresa
+            company_options = [] # Limpa as opções
+            company_to_set = "TRR" # Define TRR como valor lógico
+        else:
+            company_combo.grid_forget()
+            company_options = []
+            company_to_set = ""
+
+        company_combo.configure(values=company_options)
+        
+        # Tenta definir o valor original ou o primeiro da lista, se disponível
+        if initial_load and self.original_profiles[email]['company'] in company_options:
+            company_combo.set(self.original_profiles[email]['company'])
+        elif company_options:
+            company_combo.set(company_options[0])
+        else:
+            company_combo.set(company_to_set) # Fallback para o valor lógico (TRR) ou vazio
