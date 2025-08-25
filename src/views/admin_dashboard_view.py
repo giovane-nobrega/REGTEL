@@ -3,6 +3,7 @@
 # DESCRIÇÃO: Contém a classe de interface para o Dashboard de Gestão,
 #            agora baseado em cards dinâmicos para uma visão geral rápida.
 #            ATUALIZADO para navegar para as novas Views de gestão.
+#            CORRIGIDO para usar 'grid()' consistentemente.
 # ==============================================================================
 
 import customtkinter as ctk
@@ -43,6 +44,7 @@ class AdminDashboardView(ctk.CTkFrame):
 
         # Frame para conter os cards dinâmicos
         self.cards_container_frame = ctk.CTkFrame(self, fg_color="transparent")
+        # Posiciona o contêiner de cards usando grid para preencher o espaço disponível
         self.cards_container_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
         
         # Configura o grid do container de cards para ter 2 colunas e expandir
@@ -93,8 +95,9 @@ class AdminDashboardView(ctk.CTkFrame):
                                     command=lambda: self.controller.show_frame("MainMenuView"),
                                     fg_color=self.controller.GRAY_BUTTON_COLOR,
                                     text_color=self.controller.TEXT_COLOR,
-                                    hover_color=self.controller.GRAY_HOVER_COLOR)
-        back_button.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
+                                    hover_color=self.controller.GRAY_HOVER_COLOR,
+                                    height=40) 
+        back_button.grid(row=2, column=0, pady=(0, 10), padx=20, sticky="ew")
 
     def _create_dashboard_card(self, parent_frame, title, initial_value, row, column, command=None):
         """
@@ -124,8 +127,6 @@ class AdminDashboardView(ctk.CTkFrame):
                                           fg_color=self.controller.PRIMARY_COLOR,
                                           text_color=self.controller.TEXT_COLOR,
                                           hover_color=self.controller.ACCENT_COLOR)
-            # CORREÇÃO: Usar grid() em vez de pack() para o botão dentro do card_frame
-            # E usar sticky="ew" para preencher a largura
             action_button.grid(row=2, column=0, pady=(5, 10), padx=10, sticky="ew")
         
         return value_label # Retorna o label para que seu texto possa ser atualizado

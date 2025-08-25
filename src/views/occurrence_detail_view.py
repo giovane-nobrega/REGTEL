@@ -1,14 +1,16 @@
 # ==============================================================================
 # FICHEiro: src/views/occurrence_detail_view.py
 # DESCRIÇÃO: Contém a classe de interface para a janela (Toplevel) que exibe
-#            os detalhes completos de uma ocorrência. (VERSÃO CORRIGIDA PARA DUPLICAÇÃO DE CAMPOS)
+#            os detalhes completos de uma ocorrência. (VERSÃO CORRIGIDA)
 # ==============================================================================
 
 import customtkinter as ctk
 import json
 import webbrowser
-from datetime import datetime # Importação adicionada
-from tkinter import messagebox # Importado para mensagens de erro/aviso
+from datetime import datetime
+from tkinter import messagebox
+# CORREÇÃO: Importa 'super' e outros built-ins para satisfazer o Pylance
+from builtins import super, set, sorted, list, str, ValueError, enumerate, TypeError
 
 class OccurrenceDetailView(ctk.CTkToplevel):
     """
@@ -19,9 +21,7 @@ class OccurrenceDetailView(ctk.CTkToplevel):
         super().__init__(master)
         self.master = master # Referência ao master (App)
         self.occurrence_data = occurrence_data # Armazena os dados da ocorrência
-        self.editing_comment_id = None # NOVO: Para rastrear o comentário que está sendo editado
-
-        # print(f"DEBUG (OccurrenceDetailView): occurrence_data recebido: {self.occurrence_data}") # DEBUG PRINT REMOVIDO
+        self.editing_comment_id = None # Para rastrear o comentário que está sendo editado
 
         self.title(f"Detalhes da Ocorrência: {occurrence_data.get('ID', 'N/A')}")
         self.geometry("600x650")
@@ -30,23 +30,23 @@ class OccurrenceDetailView(ctk.CTkToplevel):
         self.grab_set()
 
         # Acessar as cores do controller (App)
-        self.controller = master # Master é a instância de App
+        self.controller = master
 
         # Definir a cor de fundo após a inicialização do super
         self.configure(fg_color=self.controller.BASE_COLOR)
 
+        # Frame principal que será rolável
         scrollable_frame = ctk.CTkScrollableFrame(self, label_text="Informações da Ocorrência",
-                                                  fg_color=self.controller.BASE_COLOR, # Cor de fundo base
+                                                  fg_color=self.controller.BASE_COLOR,
                                                   label_text_color=self.controller.TEXT_COLOR)
         scrollable_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
         # --- Exibição dos Dados Gerais ---
-        row_counter = 0
-        # Lista de chaves a serem ignoradas no loop de exibição geral (normalizadas)
+        details_frame = ctk.CTkFrame(scrollable_frame, fg_color="transparent")
+        details_frame.pack(fill="x", pady=(5, 15))
+
         keys_to_ignore_normalized = {'testes', 'anexos'}
 
-        # Mapeamento para preferir a capitalização original para exibição
-        # Adicione aqui qualquer chave que possa vir duplicada com capitalização diferente
         display_key_preference = {
             'descrição do problema': 'Descrição do problema',
             'operadora a': 'Operadora A',
@@ -55,8 +55,8 @@ class OccurrenceDetailView(ctk.CTkToplevel):
             'data de registro': 'Data de Registro',
             'status': 'Status',
             'id': 'ID',
-            'nome do registrador': 'Nome do Registrador', # Mantido, mas o SheetsService agora salva como 'Nome Completo'
-            'nome completo': 'Nome Completo', # Chave que o SheetsService agora salva
+            'nome do registrador': 'Nome do Registrador',
+            'nome completo': 'Nome Completo',
             'username do registrador': 'Username do Registrador',
             'e-mail do registrador': 'E-mail do Registrador',
             'username': 'Username',
@@ -64,44 +64,38 @@ class OccurrenceDetailView(ctk.CTkToplevel):
             'main_group': 'Grupo Principal',
             'sub_group': 'Subgrupo',
             'company': 'Empresa/Departamento',
-            'tipo': 'Tipo', # Para equipamentos
-            'modelo': 'Modelo', # Para equipamentos
-            'ramal': 'Ramal', # Para equipamentos
-            'localizacao': 'Localização', # Para equipamentos
-            'origem': 'Origem', # Para chamadas simples
-            'destino': 'Destino', # Para chamadas simples
+            'tipo': 'Tipo',
+            'modelo': 'Modelo',
+            'ramal': 'Ramal',
+            'localizacao': 'Localização',
+            'origem': 'Origem',
+            'destino': 'Destino',
             'registrador main group': 'Registrador Main Group',
             'registrador company': 'Registrador Company',
         }
 
-        # Coletar todas as chaves normalizadas únicas dos dados da ocorrência
         unique_normalized_keys = set()
         for key in occurrence_data.keys():
             unique_normalized_keys.add(key.strip().lower())
 
-        # Iterar sobre as chaves normalizadas únicas para garantir que não haja duplicatas
-        for normalized_key in sorted(list(unique_normalized_keys)): # Ordenar para exibição consistente
+        for normalized_key in sorted(list(unique_normalized_keys)):
             if normalized_key in keys_to_ignore_normalized:
                 continue
 
-            # Determinar a melhor chave para exibição (preferindo a capitalização original)
-            display_key = normalized_key # Padrão para a chave normalizada
+            display_key = normalized_key
             value_to_display = None
 
-            # Tenta encontrar a chave preferida ou a original que corresponde à normalizada
             if normalized_key in display_key_preference:
                 preferred_original_key = display_key_preference[normalized_key]
                 if preferred_original_key in occurrence_data:
                     display_key = preferred_original_key
                     value_to_display = occurrence_data[preferred_original_key]
 
-            # Se a chave preferida não foi encontrada ou não tinha valor, tenta a chave normalizada diretamente
             if value_to_display is None:
                 if normalized_key in occurrence_data:
-                    display_key = normalized_key # Usa a chave normalizada para exibição
+                    display_key = normalized_key
                     value_to_display = occurrence_data[normalized_key]
                 else:
-                    # Fallback: tentar encontrar qualquer chave que normalize para esta
                     for original_key, val in occurrence_data.items():
                         if original_key.strip().lower() == normalized_key:
                             display_key = original_key
@@ -109,9 +103,8 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                             break
 
             if value_to_display is None or str(value_to_display).strip() == "":
-                continue # Não exibe campos vazios ou sem valor
+                continue
 
-            # Formatação especial para alguns valores
             formatted_value = value_to_display
             if normalized_key == 'data de registro':
                 try:
@@ -122,31 +115,31 @@ class OccurrenceDetailView(ctk.CTkToplevel):
             elif normalized_key == 'status':
                 formatted_value = str(value_to_display).upper()
 
-            key_label = ctk.CTkLabel(scrollable_frame, text=f"{display_key}:", font=ctk.CTkFont(weight="bold"),
-                                     text_color=self.controller.TEXT_COLOR)
-            key_label.grid(row=row_counter, column=0, padx=10, pady=5, sticky="ne")
+            # CORREÇÃO DE LAYOUT: Usar um frame por linha com .pack() para alinhar
+            row_frame = ctk.CTkFrame(details_frame, fg_color="transparent")
+            row_frame.pack(fill="x", padx=10, pady=2)
 
-            value_label = ctk.CTkLabel(scrollable_frame, text=formatted_value, wraplength=400, justify="left",
-                                       text_color="gray70")
-            value_label.grid(row=row_counter, column=1, padx=10, pady=5, sticky="nw")
+            key_label = ctk.CTkLabel(row_frame, text=f"{display_key}:", font=ctk.CTkFont(weight="bold"),
+                                     width=200, anchor="e", text_color=self.controller.TEXT_COLOR)
+            key_label.pack(side="left", padx=(0, 10))
 
-            row_counter += 1
+            value_label = ctk.CTkLabel(row_frame, text=formatted_value, wraplength=300, justify="left",
+                                       anchor="w", text_color="gray70")
+            value_label.pack(side="left", fill="x", expand=True)
+
 
         # --- Exibição dos Testes de Ligação ---
-        # Acessa a chave original 'Testes' ou a normalizada 'testes'
         testes_data = occurrence_data.get('Testes') or occurrence_data.get('testes')
         if testes_data:
             try:
-                # O campo 'Testes' é uma string JSON, então precisa ser convertido
                 testes = json.loads(testes_data)
                 if testes:
                     tests_header_label = ctk.CTkLabel(scrollable_frame, text="Testes de Ligação:", font=ctk.CTkFont(size=14, weight="bold"),
                                                       text_color=self.controller.TEXT_COLOR)
-                    tests_header_label.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=(15, 5), sticky="w")
-                    row_counter += 1
+                    tests_header_label.pack(fill="x", padx=10, pady=(15, 5), anchor="w")
 
                     tests_container = ctk.CTkFrame(scrollable_frame, fg_color="gray20")
-                    tests_container.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+                    tests_container.pack(fill="x", padx=10, pady=5)
 
                     for i, teste in enumerate(testes):
                         card_text = (
@@ -160,31 +153,23 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                         test_card = ctk.CTkLabel(tests_container, text=card_text, justify="left", anchor="w",
                                                  text_color=self.controller.TEXT_COLOR)
                         test_card.pack(fill="x", padx=10, pady=5)
-                    row_counter += 1
-            except (json.JSONDecodeError, TypeError) as e:
-                print(f"Erro ao carregar testes de ligação: {e}")
-                # print(f"Dados brutos dos testes: {testes_data}") # DEBUG PRINT REMOVIDO
-                # Opcional: messagebox.showerror("Erro de Dados", f"Falha ao carregar testes de ligação: {e}. Verifique a formatação na planilha.")
-                pass # Ignora erros se o JSON for inválido
+            except (json.JSONDecodeError, TypeError):
+                pass
 
         # --- Exibição dos Anexos ---
-        # Acessa a chave original 'Anexos' ou a normalizada 'anexos'
         anexos_data = occurrence_data.get('Anexos') or occurrence_data.get('anexos')
         if anexos_data:
             try:
-                # O campo 'Anexos' também é uma string JSON
                 anexos = json.loads(anexos_data)
                 if anexos:
                     anexos_header_label = ctk.CTkLabel(scrollable_frame, text="Anexos:", font=ctk.CTkFont(size=14, weight="bold"),
                                                       text_color=self.controller.TEXT_COLOR)
-                    anexos_header_label.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=(15, 5), sticky="w")
-                    row_counter += 1
+                    anexos_header_label.pack(fill="x", padx=10, pady=(15, 5), anchor="w")
 
                     anexos_container = ctk.CTkFrame(scrollable_frame, fg_color="gray20")
-                    anexos_container.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
+                    anexos_container.pack(fill="x", padx=10, pady=5)
 
                     for i, link in enumerate(anexos):
-                        # Cria um label que parece e age como um link
                         link_font = ctk.CTkFont(underline=True)
                         link_label = ctk.CTkLabel(
                             anexos_container,
@@ -194,40 +179,30 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                             font=link_font
                         )
                         link_label.pack(anchor="w", padx=10, pady=2)
-                        # Associa o clique do mouse à função que abre o link
                         link_label.bind("<Button-1>", lambda e, url=link: webbrowser.open_new(url))
-                    row_counter += 1
             except (json.JSONDecodeError, TypeError):
-                pass # Ignora erros se o JSON for inválido
+                pass
 
-        # Nova seção para comentários
+        # --- Seção de Comentários ---
         self.comments_header_label = ctk.CTkLabel(scrollable_frame, text="Comentários:", font=ctk.CTkFont(size=14, weight="bold"),
                                                   text_color=self.controller.TEXT_COLOR)
-        self.comments_header_label.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=(15, 5), sticky="w")
-        row_counter += 1
+        self.comments_header_label.pack(fill="x", padx=10, pady=(15, 5), anchor="w")
 
         self.comments_container = ctk.CTkFrame(scrollable_frame, fg_color="gray20")
-        self.comments_container.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
-        row_counter += 1
+        self.comments_container.pack(fill="x", padx=10, pady=5)
 
-        # Área para adicionar novo comentário (AGORA VISÍVEL PARA TODOS OS UTILIZADORES)
         self.new_comment_textbox = ctk.CTkTextbox(scrollable_frame, height=80,
                                                   fg_color="gray20", text_color=self.controller.TEXT_COLOR,
                                                   border_color="gray40")
-        self.new_comment_textbox.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=(10, 5), sticky="ew")
-        row_counter += 1
+        self.new_comment_textbox.pack(fill="x", padx=10, pady=(10, 5))
 
         self.add_comment_button = ctk.CTkButton(scrollable_frame, text="Adicionar Comentário",
-                                                command=self._add_or_update_comment, # Alterado para função unificada
+                                                command=self._add_or_update_comment,
                                                 fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
                                                 hover_color=self.controller.ACCENT_COLOR)
-        self.add_comment_button.grid(row=row_counter, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="ew")
-        row_counter += 1
+        self.add_comment_button.pack(fill="x", padx=10, pady=(0, 10))
 
-
-        # Carregar e exibir comentários
         self._load_comments(occurrence_data.get('ID', 'N/A'))
-
 
         # --- Botão de Fechar ---
         close_button = ctk.CTkButton(self, text="Fechar", command=self.destroy,
@@ -249,7 +224,8 @@ class OccurrenceDetailView(ctk.CTkToplevel):
         for comment in comments:
             comment_frame = ctk.CTkFrame(self.comments_container, fg_color="gray15")
             comment_frame.pack(fill="x", padx=5, pady=3)
-            comment_frame.grid_columnconfigure(0, weight=1) # Permite que o texto do comentário se expanda
+            # Usar .grid() dentro do comment_frame é seguro, pois ele mesmo é posicionado com .pack()
+            comment_frame.grid_columnconfigure(0, weight=1)
 
             comment_date = comment.get('Data_Comentario', 'N/A')
             if comment_date != 'N/A':
@@ -257,7 +233,7 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                     date_obj = datetime.strptime(comment_date, "%Y-%m-%d %H:%M:%S")
                     comment_date = date_obj.strftime("%d-%m-%Y %H:%M:%S")
                 except ValueError:
-                    pass # Mantenha o formato original se falhar
+                    pass
 
             header_text = f"Por: {comment.get('Nome_Autor', 'N/A')} em {comment_date}"
             ctk.CTkLabel(comment_frame, text=header_text, font=ctk.CTkFont(weight="bold"), text_color=self.controller.PRIMARY_COLOR).grid(row=0, column=0, sticky="w", padx=10, pady=(5,0))
@@ -265,8 +241,6 @@ class OccurrenceDetailView(ctk.CTkToplevel):
             comment_text_label = ctk.CTkLabel(comment_frame, text=comment.get('Comentario', ''), wraplength=450, justify="left", text_color=self.controller.TEXT_COLOR)
             comment_text_label.grid(row=1, column=0, sticky="w", padx=10, pady=(0,5))
 
-            # Botões de Editar e Eliminar
-            # Apenas o autor do comentário pode editar/eliminar
             if comment.get('Email_Autor') == self.controller.user_email:
                 button_frame = ctk.CTkFrame(comment_frame, fg_color="transparent")
                 button_frame.grid(row=0, column=1, rowspan=2, sticky="e", padx=5, pady=5)
@@ -282,7 +256,6 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                                               fg_color=self.controller.DANGER_COLOR, text_color="white", hover_color=self.controller.DANGER_HOVER_COLOR,
                                               font=ctk.CTkFont(size=11))
                 delete_button.pack(pady=(2, 0))
-
 
     def _add_or_update_comment(self):
         """Lógica para adicionar um novo comentário ou atualizar um existente."""
@@ -300,21 +273,17 @@ class OccurrenceDetailView(ctk.CTkToplevel):
             return
 
         if self.editing_comment_id:
-            # Modo de edição
             success, message = self.controller.sheets_service.update_occurrence_comment(self.editing_comment_id, comment_text)
-            self.editing_comment_id = None # Reseta o ID de edição
+            self.editing_comment_id = None
             self.add_comment_button.configure(text="Adicionar Comentário", fg_color=self.controller.PRIMARY_COLOR, hover_color=self.controller.ACCENT_COLOR)
         else:
-            # Modo de adição
             success, message = self.controller.sheets_service.add_occurrence_comment(occurrence_id, user_email, user_name, comment_text)
         
         if success:
             from .notification_popup import NotificationPopup
-            NotificationPopup(self.master, message=message, type="success",
-                              bg_color_success="green", text_color_success="white",
-                              bg_color_info="gray", text_color_info="white")
+            NotificationPopup(self.master, message=message, type="success")
             self.new_comment_textbox.delete("1.0", "end")
-            self._load_comments(occurrence_id) # Recarrega a lista de comentários
+            self._load_comments(occurrence_id)
         else:
             messagebox.showerror("Erro", f"Não foi possível completar a operação: {message}")
 
@@ -323,7 +292,7 @@ class OccurrenceDetailView(ctk.CTkToplevel):
         self.new_comment_textbox.delete("1.0", "end")
         self.new_comment_textbox.insert("1.0", comment_data.get('Comentario', ''))
         self.editing_comment_id = comment_data.get('id_comentario')
-        self.add_comment_button.configure(text="Atualizar Comentário", fg_color="orange", hover_color="darkorange") # Mudar cor para indicar edição
+        self.add_comment_button.configure(text="Atualizar Comentário", fg_color="orange", hover_color="darkorange")
 
     def _delete_comment(self, comment_id):
         """Elimina um comentário após confirmação."""
@@ -331,10 +300,7 @@ class OccurrenceDetailView(ctk.CTkToplevel):
             success, message = self.controller.sheets_service.delete_occurrence_comment(comment_id)
             if success:
                 from .notification_popup import NotificationPopup
-                NotificationPopup(self.master, message=message, type="success",
-                                  bg_color_success="green", text_color_success="white",
-                                  bg_color_info="gray", text_color_info="white")
-                self._load_comments(self.occurrence_data.get('ID', 'N/A')) # Recarrega a lista
+                NotificationPopup(self.master, message=message, type="success")
+                self._load_comments(self.occurrence_data.get('ID', 'N/A'))
             else:
                 messagebox.showerror("Erro", f"Não foi possível eliminar o comentário: {message}")
-

@@ -3,6 +3,7 @@
 # DESCRIÇÃO: Contém as classes de interface para o fluxo de solicitação
 #            e aprovação de acesso de novos utilizadores.
 #            Inclui validações, agrupamento de campos e feedback visual.
+#            ATUALIZADO para usar 'grid()' no layout principal e 'pack()' para botões.
 # ==============================================================================
 
 import customtkinter as ctk # Biblioteca CustomTkinter para interface gráfica
@@ -33,28 +34,30 @@ class RequestAccessView(ctk.CTkFrame):
         self.partner_list = ["M2 TELECOMUNICAÇÕES", "MDA FIBRA", "DISK SISTEMA TELECOM", "GMN TELECOM", "67 INTERNET"]
         self.prefeitura_dept_list = ["SECRETARIA DE SAUDE", "SECRETARIA DE OBRAS", "DEPARTAMENTO DE TI", "GUARDA MUNICIPAL", "GABINETE DO PREFEITO", "OUTRO"]
 
-        # Configuração de responsividade da grade (grid) da tela.
+        # Configuração de responsividade da grade (grid) da tela
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
         # Frame central para agrupar os widgets e centralizá-los.
         center_frame = ctk.CTkFrame(self, fg_color="transparent")
-        center_frame.grid(row=0, column=0)
+        center_frame.grid(row=0, column=0, sticky="nsew") # Posiciona o frame centralizado com grid
+        center_frame.grid_rowconfigure((0, 1, 2, 3, 4, 5, 6), weight=0) # Linhas para os widgets
+        center_frame.grid_columnconfigure(0, weight=1) # Coluna para centralizar conteúdo
 
         # Rótulos de título e subtítulo da tela.
         title = ctk.CTkLabel(center_frame, text="Solicitação de Acesso",
                              font=ctk.CTkFont(size=24, weight="bold"),
                              text_color=self.controller.TEXT_COLOR)
+        title.grid(row=0, column=0, pady=(0,10))
+
         subtitle = ctk.CTkLabel(center_frame, text="O seu e-mail não está registrado. Por favor, preencha seus dados para solicitar o acesso.",
                                 wraplength=400, text_color="gray70")
-
-        title.pack(pady=(0,10))
-        subtitle.pack(pady=(0, 20))
+        subtitle.grid(row=1, column=0, pady=(0, 20))
 
         # --- FRAME PARA DADOS PESSOAIS ---
         # Agrupa os campos de nome completo e nome de utilizador.
         personal_data_frame = ctk.CTkFrame(center_frame, fg_color="gray15", corner_radius=10)
-        personal_data_frame.pack(pady=(10, 10), padx=20, fill="x", expand=False)
+        personal_data_frame.grid(row=2, column=0, pady=(10, 10), padx=20, sticky="ew")
         personal_data_frame.grid_columnconfigure(0, weight=1) # Coluna para rótulos
         personal_data_frame.grid_columnconfigure(1, weight=3) # Coluna para campos de entrada
 
@@ -86,7 +89,7 @@ class RequestAccessView(ctk.CTkFrame):
         # --- FRAME PARA DADOS DE VÍNCULO ---
         # Agrupa os campos de vínculo principal, departamento/empresa e subgrupo.
         affiliation_data_frame = ctk.CTkFrame(center_frame, fg_color="gray15", corner_radius=10)
-        affiliation_data_frame.pack(pady=(10, 10), padx=20, fill="x", expand=False)
+        affiliation_data_frame.grid(row=3, column=0, pady=(10, 10), padx=20, sticky="ew")
         affiliation_data_frame.grid_columnconfigure(0, weight=1) # Coluna para rótulos
         affiliation_data_frame.grid_columnconfigure(1, weight=3) # Coluna para campos de entrada
 
@@ -128,12 +131,12 @@ class RequestAccessView(ctk.CTkFrame):
         self.submit_button = ctk.CTkButton(center_frame, text="Enviar Solicitação", command=self.submit, height=40,
                                            fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
                                            hover_color=self.controller.ACCENT_COLOR)
-        self.submit_button.pack(pady=20, padx=20, fill="x")
+        self.submit_button.grid(row=4, column=0, pady=20, padx=20, sticky="ew")
 
         # Botão para sair da aplicação (logout).
         self.logout_button = ctk.CTkButton(center_frame, text="Sair", command=self.controller.perform_logout, height=40,
                                            fg_color=self.controller.GRAY_BUTTON_COLOR, hover_color=self.controller.GRAY_HOVER_COLOR)
-        self.logout_button.pack(pady=10, padx=20, fill="x")
+        self.logout_button.grid(row=5, column=0, pady=10, padx=20, sticky="ew")
 
         # --- Configuração da Lógica de Validação Proativa e Foco ---
         self.default_border_color = self.name_entry.cget("border_color") # Armazena a cor da borda padrão para resetar validações
@@ -431,37 +434,40 @@ class PendingApprovalView(ctk.CTkFrame):
 
         self.configure(fg_color=self.controller.BASE_COLOR)
 
+        # Configuração de responsividade da grade (grid) da tela
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
         center_frame = ctk.CTkFrame(self, fg_color="transparent")
-        center_frame.grid(row=0, column=0)
+        center_frame.grid(row=0, column=0, sticky="nsew") # Posiciona o frame centralizado
+        center_frame.grid_rowconfigure((0, 1, 2, 3, 4, 5), weight=0) # Linhas para os widgets
+        center_frame.grid_columnconfigure(0, weight=1) # Coluna para centralizar conteúdo
 
         # Rótulos de título e subtítulo da tela.
         title = ctk.CTkLabel(center_frame, text="Acesso Pendente",
                              font=ctk.CTkFont(size=24, weight="bold"),
                              text_color=self.controller.TEXT_COLOR)
-        title.pack(pady=(0, 10))
+        title.grid(row=0, column=0, pady=(0, 10))
 
         subtitle = ctk.CTkLabel(center_frame, text="Sua solicitação de acesso está aguardando aprovação de um administrador. O status será verificado a cada 30 segundos.",
                                 wraplength=450, text_color="gray70")
-        subtitle.pack(pady=(0, 20))
+        subtitle.grid(row=1, column=0, pady=(0, 20))
 
         # Rótulo para feedback visual do status da verificação.
         self.status_label = ctk.CTkLabel(center_frame, text="A verificar o status...",
                                          font=ctk.CTkFont(size=14, slant="italic"),
                                          text_color=self.controller.ACCENT_COLOR)
-        self.status_label.pack(pady=(0, 10))
+        self.status_label.grid(row=2, column=0, pady=(0, 10))
 
         # Botão para forçar uma verificação manual do status.
         check_button = ctk.CTkButton(center_frame, text="Verificar Agora", command=self.check_status_now,
                                       fg_color=self.controller.PRIMARY_COLOR, hover_color=self.controller.ACCENT_COLOR)
-        check_button.pack(pady=(0, 10))
+        check_button.grid(row=3, column=0, pady=(0, 10))
 
         # Botão para sair da aplicação (logout).
         logout_button = ctk.CTkButton(center_frame, text="Sair", command=self.controller.perform_logout, height=40,
                                       fg_color=self.controller.GRAY_BUTTON_COLOR, hover_color=self.controller.GRAY_HOVER_COLOR)
-        logout_button.pack()
+        logout_button.grid(row=4, column=0, pady=10)
 
         self.is_running = False # Flag para controlar o loop da thread de verificação
         self.checker_thread = None # Referência à thread de verificação
@@ -524,4 +530,3 @@ class PendingApprovalView(ctk.CTkFrame):
             self.status_label.configure(text="A verificar o status agora...")
             self.checker_thread = threading.Thread(target=self._check_status_thread, daemon=True)
             self.checker_thread.start()
-

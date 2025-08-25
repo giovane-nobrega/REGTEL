@@ -1,10 +1,12 @@
 # ==============================================================================
 # FICHEIRO: src/views/notification_popup.py
 # DESCRIÇÃO: Implementa um pop-up de notificação temporário e não-bloqueante.
-#            (VERSÃO CORRIGIDA PARA DEPENDÊNCIA DE CORES)
+#            (VERSÃO CORRIGIDA PARA DEPENDÊNCIA DE CORES E ALERTAS PYLANCE)
 # ==============================================================================
 
 import customtkinter as ctk
+# CORREÇÃO: Importa 'super' e 'float' explicitamente para satisfazer o Pylance
+from builtins import super, float
 
 class NotificationPopup(ctk.CTkToplevel):
     """
@@ -24,7 +26,6 @@ class NotificationPopup(ctk.CTkToplevel):
         self.wm_attributes("-alpha", 0.0) # Começa invisível para fade-in
 
         # Definir a cor de fundo e do texto com base no tipo de notificação
-        # Agora as cores são passadas como argumentos, eliminando a dependência do controller
         bg_color = bg_color_info
         text_color = text_color_info
 
@@ -63,7 +64,6 @@ class NotificationPopup(ctk.CTkToplevel):
 
     def fade_in(self):
         """Faz a notificação aparecer gradualmente."""
-        # Correção: Usar wm_attributes em vez de winfo_attributes
         alpha = self.wm_attributes("-alpha")
         if float(alpha) < 0.9: # Converter para float para comparação
             alpha = float(alpha) + 0.1
@@ -74,7 +74,6 @@ class NotificationPopup(ctk.CTkToplevel):
 
     def fade_out(self):
         """Faz a notificação desaparecer gradualmente."""
-        # Correção: Usar wm_attributes em vez de winfo_attributes
         alpha = self.wm_attributes("-alpha")
         if float(alpha) > 0: # Converter para float para comparação
             alpha = float(alpha) - 0.1 # Reduz a transparência em 0.1
