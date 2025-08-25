@@ -2,12 +2,13 @@
 # FICHEIRO: src/services/auth_service.py
 # DESCRIÇÃO: Lida com a autenticação de utilizadores (OAuth) e da conta de serviço.
 #            (COM TRATAMENTO DE ERRO DE SCOPE E NOVO ESCOPO DE SHEETS)
+#            CORRIGIDO: Tratamento de 'expiry' para evitar 'NoneType' object has no attribute 'replace'.
 # ==============================================================================
 
 import os
 import sys
 from tkinter import messagebox
-import json # Importado para serializar/deserializar credenciais
+import json
 # import datetime # REMOVIDO: Não é mais necessário para a conversão de expiry aqui
 
 # --- Dependências Google ---
@@ -38,7 +39,7 @@ class AuthService:
     def _resource_path(self, relative_path):
         """ Obtém o caminho absoluto para os recursos, funciona para dev e para executável. """
         try:
-            base_path = sys._MEIPASS
+            base_path = sys._MEIPASS # pyright: ignore[reportAttributeAccessIssue]
         except Exception:
             base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
         return os.path.join(base_path, relative_path)
@@ -50,18 +51,13 @@ class AuthService:
         CORRIGIDO: O campo 'expiry' é passado como string ISO para Credentials.from_authorized_user_info.
         """
         creds = None
-        # Tenta carregar a sessão criptografada
         session_data = self.auth_manager.load_session()
         
         if session_data:
             try:
-                # REMOVIDO: A conversão explícita de 'expiry' para datetime.
-                # Credentials.from_authorized_user_info espera 'expiry' como string ISO 8601.
-                # if 'expiry' in session_data and session_data['expiry']:
-                #     session_data['expiry'] = safe_fromisoformat(session_data['expiry'])
-                
-                # Recria o objeto Credentials a partir dos dados salvos
-                # session_data já contém 'expiry' como string ISO 8601
+                # CORREÇÃO: Passar o expiry como string ISO 8601 para Credentials.from_authorized_user_info.
+                # A função Credentials.from_authorized_user_info já espera 'expiry' como string.
+                # Se 'expiry' não estiver presente ou for None, o Google Auth lida com isso.
                 creds = Credentials.from_authorized_user_info(session_data, self.SCOPES_USER)
                 
                 # Se as credenciais existirem, estiverem expiradas e tiverem um refresh_token, tenta refrescar
@@ -156,3 +152,4 @@ class AuthService:
         except Exception as e:
             messagebox.showerror("Erro Crítico", f"Falha ao carregar credenciais da conta de serviço: {e}")
             return None
+

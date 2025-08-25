@@ -34,7 +34,6 @@ class AccessManagementView(ctk.CTkFrame):
         self.pending_users_frame = ctk.CTkScrollableFrame(self, label_text="Carregando solicitações...",
                                                           fg_color="gray10",
                                                           label_text_color=self.controller.TEXT_COLOR)
-        # CORREÇÃO: Substituído 'fill' e 'expand' por 'sticky="nsew"' para preencher o espaço no grid
         self.pending_users_frame.grid(row=1, column=0, pady=10, padx=20, sticky="nsew")
 
         # Botão para atualizar a lista de solicitações
@@ -55,6 +54,8 @@ class AccessManagementView(ctk.CTkFrame):
         print("DEBUG: AccessManagementView exibida. Carregando solicitações de acesso.")
         self.pending_users_frame.configure(label_text="Carregando solicitações...")
         self.update_idletasks()
+        # Força o recarregamento do cache de usuários no controller antes de carregar as solicitações
+        self.controller.get_all_users(force_refresh=True) 
         self.load_access_requests()
 
     def load_access_requests(self):
@@ -63,7 +64,16 @@ class AccessManagementView(ctk.CTkFrame):
         """
         # A chamada para get_pending_requests() já é thread-safe e busca os dados.
         # O self.after(0, ...) garante que a atualização da UI ocorra na thread principal.
-        threading.Thread(target=lambda: self.after(0, self._populate_access_requests, self.controller.get_pending_requests()), daemon=True).start()
+        threading.Thread(target=self._load_access_requests_thread, daemon=True).start()
+
+    def _load_access_requests_thread(self):
+        """
+        Busca as solicitações de acesso pendentes e as popula na UI.
+        """
+        pending_list = self.controller.get_pending_requests()
+        print(f"DEBUG: Solicitações pendentes obtidas: {pending_list}") # Adicionado print de depuração
+        self.after(0, self._populate_access_requests, pending_list)
+
 
     def _populate_access_requests(self, pending_list):
         """
@@ -79,7 +89,6 @@ class AccessManagementView(ctk.CTkFrame):
         self.pending_users_frame.configure(label_text="")
 
         for user in pending_list:
-            # .pack() é seguro aqui porque o pai é o _CTkScrollableFrame e não há conflito com grid/place.
             card = ctk.CTkFrame(self.pending_users_frame, fg_color="gray20")
             card.pack(fill="x", pady=5, padx=5) # Preenche a largura do frame rolável
 
@@ -91,7 +100,6 @@ class AccessManagementView(ctk.CTkFrame):
                          text_color=self.controller.TEXT_COLOR).pack(side="left", padx=10, pady=5)
 
             # Botões de ação (Aprovar/Rejeitar)
-            # Definindo altura e largura no construtor para consistência
             ctk.CTkButton(card, text="Rejeitar",
                           command=partial(self._handle_access_update, user['email'], 'rejected'),
                           fg_color=self.controller.DANGER_COLOR, text_color=self.controller.TEXT_COLOR,
@@ -112,5 +120,5 @@ class AccessManagementView(ctk.CTkFrame):
         :param new_status: O novo status ('approved' ou 'rejected').
         """
         self.controller.update_user_access(email, new_status)
-        # Não é necessário chamar load_access_requests() aqui, pois o controller já faz o refresh.
-        # self.load_access_requests()
+        # A função update_user_access no controller já recarrega a lista
+        # na AccessManagementView se ela estiver ativa, então não precisamos chamar load_access_requests() aqui.

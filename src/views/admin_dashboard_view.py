@@ -4,6 +4,7 @@
 #            agora baseado em cards dinâmicos para uma visão geral rápida.
 #            ATUALIZADO para navegar para as novas Views de gestão.
 #            CORRIGIDO para usar 'grid()' consistentemente.
+#            ATUALIZADO: Layout dos cards para formato de lista vertical.
 # ==============================================================================
 
 import customtkinter as ctk
@@ -34,7 +35,8 @@ class AdminDashboardView(ctk.CTkFrame):
         self.configure(fg_color=self.controller.BASE_COLOR)
 
         # Configuração de responsividade do grid principal
-        self.grid_rowconfigure(1, weight=1)  # Linha para os cards
+        self.grid_rowconfigure(1, weight=1)  # Linha para o cards_container_frame expandir
+        self.grid_rowconfigure(2, weight=0)  # Linha para o botão "Voltar ao Menu" não expandir
         self.grid_columnconfigure(0, weight=1) # Coluna principal
 
         # Título principal do dashboard
@@ -44,12 +46,12 @@ class AdminDashboardView(ctk.CTkFrame):
 
         # Frame para conter os cards dinâmicos
         self.cards_container_frame = ctk.CTkFrame(self, fg_color="transparent")
-        # Posiciona o contêiner de cards usando grid para preencher o espaço disponível
         self.cards_container_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
         
-        # Configura o grid do container de cards para ter 2 colunas e expandir
-        self.cards_container_frame.grid_columnconfigure((0, 1), weight=1)
-        self.cards_container_frame.grid_rowconfigure((0, 1), weight=1) # Duas linhas para 4 cards (se necessário)
+        # CORREÇÃO: Configura o grid do container de cards para ter 1 coluna
+        self.cards_container_frame.grid_columnconfigure(0, weight=1)
+        # Configura as linhas para os cards empilhados
+        self.cards_container_frame.grid_rowconfigure((0, 1, 2), weight=0) 
 
         # --- Criação dos Cards Dinâmicos ---
         # Card de Ocorrências Pendentes
@@ -57,8 +59,9 @@ class AdminDashboardView(ctk.CTkFrame):
             parent_frame=self.cards_container_frame,
             title="Ocorrências Pendentes",
             initial_value="...",
-            row=0, column=0,
-            command=lambda: self.controller.show_frame("HistoryView", from_view="AdminDashboardView")
+            row=0, column=0, # Primeira linha, primeira coluna
+            pady=(0, 15), # Ajuste de espaçamento # pyright: ignore[reportArgumentType]
+            command=lambda: self.controller.show_frame("HistoryView", from_view="AdminDashboardView", mode="pending")
         )
 
         # Card de Solicitações de Acesso Pendentes
@@ -66,8 +69,8 @@ class AdminDashboardView(ctk.CTkFrame):
             parent_frame=self.cards_container_frame,
             title="Solicitações de Acesso",
             initial_value="...",
-            row=0, column=1,
-            # AGORA NAVEGA PARA A NOVA TELA DE GERENCIAMENTO DE ACESSOS
+            row=1, column=0, # Segunda linha, primeira coluna
+            pady=(0, 15), # Ajuste de espaçamento # pyright: ignore[reportArgumentType]
             command=lambda: self.controller.show_frame("AccessManagementView") 
         )
 
@@ -76,19 +79,12 @@ class AdminDashboardView(ctk.CTkFrame):
             parent_frame=self.cards_container_frame,
             title="Utilizadores Ativos",
             initial_value="...",
-            row=1, column=0,
-            # AGORA NAVEGA PARA A NOVA TELA DE GERENCIAMENTO DE USUÁRIOS
+            row=2, column=0, # Terceira linha, primeira coluna
+            pady=(0, 15), # Ajuste de espaçamento # pyright: ignore[reportArgumentType]
             command=lambda: self.controller.show_frame("UserManagementView") 
         )
 
-        # Card para Navegar para o Histórico Completo
-        self.full_history_card_label = self._create_dashboard_card(
-            parent_frame=self.cards_container_frame,
-            title="Ver Histórico Completo",
-            initial_value="Ir para",
-            row=1, column=1,
-            command=lambda: self.controller.show_frame("HistoryView", from_view="AdminDashboardView")
-        )
+        # REMOVIDO: O Card "Ver Histórico Completo" foi removido conforme a solicitação.
 
         # Botão para voltar ao menu principal (mantido na parte inferior)
         back_button = ctk.CTkButton(self, text="Voltar ao Menu",
@@ -97,9 +93,10 @@ class AdminDashboardView(ctk.CTkFrame):
                                     text_color=self.controller.TEXT_COLOR,
                                     hover_color=self.controller.GRAY_HOVER_COLOR,
                                     height=40) 
+        # CORREÇÃO: Mude sua posição no grid principal para row=2, column=0 (abaixo do container de cards)
         back_button.grid(row=2, column=0, pady=(0, 10), padx=20, sticky="ew")
 
-    def _create_dashboard_card(self, parent_frame, title, initial_value, row, column, command=None):
+    def _create_dashboard_card(self, parent_frame, title, initial_value, row, column, command=None, pady=10):
         """
         Cria um card padrão para o dashboard com título, valor dinâmico e um botão de ação.
         :param parent_frame: O frame pai onde o card será colocado.
@@ -108,10 +105,11 @@ class AdminDashboardView(ctk.CTkFrame):
         :param row: A linha no grid do parent_frame.
         :param column: A coluna no grid do parent_frame.
         :param command: A função a ser chamada quando o botão do card é clicado.
+        :param pady: Preenchimento vertical para o card.
         :return: O widget CTkLabel que exibe o valor, para que possa ser atualizado dinamicamente.
         """
         card_frame = ctk.CTkFrame(parent_frame, fg_color="gray15", corner_radius=10)
-        card_frame.grid(row=row, column=column, padx=10, pady=10, sticky="nsew")
+        card_frame.grid(row=row, column=column, padx=10, pady=pady, sticky="ew") # Alterado sticky para "ew" e adicionado pady
         card_frame.grid_columnconfigure(0, weight=1) # Permite que o conteúdo do card se expanda
         card_frame.grid_rowconfigure(2, weight=0) # Adiciona uma linha para o botão
 

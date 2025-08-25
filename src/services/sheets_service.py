@@ -3,6 +3,8 @@
 # DESCRIÇÃO: Lida com todas as operações de leitura e escrita na planilha
 #            Google Sheets, otimizado com operações em lote.
 #            Gere o acesso a diferentes abas (folhas) e tipos de ocorrências.
+#            CORRIGIDO: Lógica de filtragem para o grupo PREFEITURA e tratamento de NoneType.
+#            CORRIGIDO: Uso da chave normalizada 'registradormaingroup'.
 # ==============================================================================
 
 import gspread # Biblioteca Python para interagir com a Google Sheets API
@@ -142,7 +144,7 @@ class SheetsService:
                 media = MediaFileUpload(file_path, resumable=True) # Prepara o ficheiro para upload resumível
                 file = drive_service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
                 
-                # Torna o ficheiro publicamente acessível (qualquer um pode ler)
+                # Torna o ficheiro publicamente acessível (qualquer uno pode ler)
                 # ATENÇÃO: Reavalie esta permissão se os anexos puderem conter dados sensíveis.
                 # Se o acesso público não for estritamente necessário, remova esta linha ou restrinja o acesso.
                 drive_service.permissions().create(fileId=file.get('id'), body={'role': 'reader', 'type': 'anyone'}).execute()
@@ -338,8 +340,8 @@ class SheetsService:
         user_profile = self.check_user_status(user_email) # Obtém o perfil do utilizador
         
         # --- DEBUG: Informações do Perfil do Utilizador ---
-        print(f"\n--- DEBUG: get_occurrences_by_user para {user_email} ---") # Usando print explicitamente
-        print(f"DEBUG: Perfil do Utilizador: {user_profile}") # Usando print explicitamente
+        print(f"\n=== DEBUG get_occurrences_by_user ===")
+        print("Usuário:", user_email, "Grupo:", user_profile.get("main_group"))
         # ----------------------------------------------------
 
         if not user_profile or user_profile.get('status') != 'approved':
@@ -352,6 +354,14 @@ class SheetsService:
 
         all_occurrences = self.get_all_occurrences() # Obtém TODAS as ocorrências
         filtered_list = list() # Lista para armazenar as ocorrências filtradas
+
+        # --- DEBUG: Informações sobre as ocorrências ---
+        if all_occurrences:
+            print("OCC KEYS (primeira ocorrência):", list(all_occurrences[0].keys()))
+            print("OCC SAMPLE (primeira ocorrência):", all_occurrences[0])
+        else:
+            print("Nenhuma ocorrência carregada.")
+        # ------------------------------------------------
 
         print(f"DEBUG: Grupo Principal: {main_group}, Subgrupo do Utilizador: '{user_sub_group}', Empresa do Utilizador: '{user_company}'") # Usando print explicitamente
         print(f"DEBUG: Total de ocorrências carregadas (antes do filtro): {len(all_occurrences)}") # Usando print e len explicitamente
@@ -373,8 +383,8 @@ class SheetsService:
                 return list() # Usando list explicitamente
             
             for occ in all_occurrences:
-                occurrence_id = occ.get('ID', '').strip().upper()
-                occ_registrador_company = occ.get('Registrador Company', '').strip().upper()
+                occurrence_id = occ.get('id', '').strip().upper() # Usando a chave normalizada 'id'
+                occ_registrador_company = occ.get('registrador company', '').strip().upper() # Usando a chave normalizada 'registrador company'
 
                 # Excluir ocorrências de equipamento para utilizadores PARTNER
                 if 'EQUIP' in occurrence_id:
@@ -397,28 +407,29 @@ class SheetsService:
             return filtered_list
 
         # Prefeitura:
-        # 1. Devem ver todas as ocorrências onde o 'Registrador Main Group' é 'PREFEITURA' (qualquer tipo, incluindo SCALL e EQUIP).
-        # 2. Devem ver ocorrências de EQUIPAMENTO ('EQUIP') onde o 'Registrador Main Group' é '67_TELECOM'.
-        # 3. Devem ver ocorrências de CHAMADA SIMPLES ('SCALL') onde o 'Registrador Main Group' é '67_TELECOM'.
+        # Devem ver:
+        # 1. Suas próprias ocorrências (qualquer tipo: CALL, SCALL, EQUIP)
+        # 2. Ocorrências de EQUIPAMENTO ('EQUIP') registradas por utilizadores '67_TELECOM'
+        # 3. Ocorrências de CHAMADA SIMPLES ('SCALL') registradas por utilizadores '67_TELECOM'
         elif main_group == 'PREFEITURA':
             for occ in all_occurrences:
-                occurrence_id = occ.get('ID', '').strip().upper()
-                occ_registrador_main_group = occ.get('Registrador Main Group', '').strip().upper()
+                # Tenta pegar tanto a chave normalizada quanto a original para robustez
+                occ_group = (str(occ.get("registradormaingroup") or occ.get("RegistradorMainGroup") or "")).upper()
+                occ_id = occ.get("id", "") # Usar a chave normalizada 'id'
 
-                # Incluir ocorrências registadas por utilizadores PREFEITURA (qualquer tipo)
-                if occ_registrador_main_group == 'PREFEITURA':
+                # Condição para incluir ocorrências:
+                # 1. Se a ocorrência foi registrada por um usuário da PREFEITURA (qualquer tipo)
+                # OU
+                # 2. Se a ocorrência é de EQUIPAMENTO E foi registrada por um usuário da 67_TELECOM
+                # OU
+                # 3. Se a ocorrência é de CHAMADA SIMPLES E foi registrada por um usuário da 67_TELECOM
+                if (occ_group == "PREFEITURA" or
+                    (occ_id.startswith("EQUIP") and occ_group == "67_TELECOM") or
+                    (occ_id.startswith("SCALL") and occ_group == "67_TELECOM")):
                     filtered_list.append(occ)
-                    print(f"DEBUG PREFEITURA: Incluindo ocorrência ID: {occurrence_id} (Registrador Main Group: {occ_registrador_main_group})")
-                # Incluir ocorrências de EQUIPAMENTO registadas por utilizadores 67_TELECOM
-                elif 'EQUIP' in occurrence_id and occ_registrador_main_group == '67_TELECOM':
-                    filtered_list.append(occ)
-                    print(f"DEBUG PREFEITURA: Incluindo ocorrência de equipamento ID: {occurrence_id} (Registrador Main Group: {occ_registrador_main_group})")
-                # Incluir ocorrências de CHAMADA SIMPLES registadas por utilizadores 67_TELECOM
-                elif 'SCALL' in occurrence_id and occ_registrador_main_group == '67_TELECOM':
-                    filtered_list.append(occ)
-                    print(f"DEBUG PREFEITURA: Incluindo ocorrência de chamada simples ID: {occurrence_id} (Registrador Main Group: {occ_registrador_main_group})")
+                    print(f"DEBUG PREFEITURA: Incluindo ocorrência ID: {occ_id} (Registrador Main Group: {occ_group})")
                 else:
-                    print(f"DEBUG PREFEITURA: Excluindo ocorrência ID: {occurrence_id} (Não corresponde às regras da Prefeitura)")
+                    print(f"DEBUG PREFEITURA: Excluindo ocorrência ID: {occ_id} (Não corresponde às regras da Prefeitura)")
 
             print(f"DEBUG: Grupo '{main_group}' detectado. Ocorrências filtradas: {len(filtered_list)}") # Usando print e len explicitamente
             return filtered_list
@@ -512,7 +523,7 @@ class SheetsService:
             company_name or ""  # Coluna 7: Empresa/Departamento (vazio se None)
         ]
         try:
-            ws.append_row(new_row, value_input_option='USER_ENTERED') # Adiciona a nova linha
+            ws.append_row(new_row, value_input_option='USER_ENTERED') # pyright: ignore[reportArgumentType] # Adiciona a nova linha
             return bool(True), "Solicitação de acesso enviada com sucesso." # Usando bool explicitamente
         except Exception as e:
             return bool(False), f"Ocorreu um erro ao enviar a solicitação: {e}" # Usando bool explicitamente
@@ -540,7 +551,7 @@ class SheetsService:
         try:
             cell = ws.find(email, in_column=1) # Encontra a célula com o e-mail na coluna 1
             if cell: ws.update_cell(cell.row, 6, new_status) # Atualiza a célula na coluna 6 (Status)
-        except gspread.exceptions.CellNotFound: print(f"Usuário {email} não encontrado.") # Usando print explicitamente
+        except gspread.exceptions.CellNotFound: print(f"Usuário {email} não encontrado.") # pyright: ignore[reportAttributeAccessIssue] # Usando print explicitamente
         except Exception as e: print(f"Erro ao atualizar status do usuário {email}: {e}") # Usando print explicitamente
 
     def get_occurrence_by_id(self, occurrence_id):
@@ -585,7 +596,7 @@ class SheetsService:
                 return bool(True), "Status atualizado com sucesso." # Usando bool explicitamente
             else:
                 return bool(False), f"Ocorrência {occurrence_id} não encontrada." # Usando bool explicitamente
-        except gspread.exceptions.CellNotFound:
+        except gspread.exceptions.CellNotFound: # pyright: ignore[reportAttributeAccessIssue]
             return bool(False), f"Ocorrência com ID {occurrence_id} não encontrada na planilha {sheet_name}." # Usando bool explicitamente
         except Exception as e:
             return bool(False), f"Erro ao atualizar o status da ocorrência {occurrence_id}: {e}" # Usando bool explicitamente
@@ -618,7 +629,7 @@ class SheetsService:
                 'REGISTRADO', data.get('origem'), data.get('destino'), data.get('descricao'),
                 user_profile.get("main_group", "N/A"), user_profile.get("company", "")
             ]
-            ws.append_row(new_row, value_input_option='USER_ENTERED') # Adiciona a linha
+            ws.append_row(new_row, value_input_option='USER_ENTERED') # pyright: ignore[reportArgumentType] # Adiciona a linha
             return bool(True), "Ocorrência registrada com sucesso." # Usando bool explicitamente
         except Exception as e:
             return bool(False), f"Ocorreu um erro ao registrar: {e}" # Usando bool explicitamente
@@ -657,7 +668,7 @@ class SheetsService:
             user_profile.get("main_group", "N/A"), user_profile.get("company", "")
         ]
         try:
-            ws.append_row(new_row, value_input_option='USER_ENTERED') # Adiciona a linha
+            ws.append_row(new_row, value_input_option='USER_ENTERED') # pyright: ignore[reportArgumentType] # Adiciona a linha
             return bool(True), "Ocorrência de equipamento registrada com sucesso." # Usando bool explicitamente
         except Exception as e:
             return bool(False), f"Ocorreu um erro ao registrar: {e}" # Usando bool explicitamente
@@ -694,7 +705,7 @@ class SheetsService:
             user_profile.get("main_group", "N/A"), user_profile.get("company", "")
         ]
         try:
-            ws.append_row(new_row, value_input_option='USER_ENTERED') # Adiciona a linha
+            ws.append_row(new_row, value_input_option='USER_ENTERED') # pyright: ignore[reportArgumentType] # Adiciona a linha
             return bool(True), "Ocorrência detalhada registrada com sucesso." # Usando bool explicitamente
         except Exception as e:
             return bool(False), f"Ocorreu um erro ao registrar: {e}" # Usando bool explicitamente
@@ -725,7 +736,7 @@ class SheetsService:
             comment_text
         ]
         try:
-            ws.append_row(new_row, value_input_option='USER_ENTERED') # Adiciona a nova linha
+            ws.append_row(new_row, value_input_option='USER_ENTERED') # pyright: ignore[reportArgumentType] # Adiciona a nova linha
             return bool(True), "Comentário adicionado com sucesso." # Usando bool explicitamente
         except Exception as e:
             return bool(False), f"Ocorreu um erro ao adicionar o comentário: {e}" # Usando bool explicitamente
@@ -748,7 +759,7 @@ class SheetsService:
                 return bool(True), "Comentário atualizado com sucesso." # Usando bool explicitamente
             else:
                 return bool(False), f"Comentário com ID {comment_id} não encontrado." # Usando bool explicitamente
-        except gspread.exceptions.CellNotFound:
+        except gspread.exceptions.CellNotFound: # pyright: ignore[reportAttributeAccessIssue]
             return bool(False), f"Comentário com ID {comment_id} não encontrado na planilha de comentários." # Usando bool explicitamente
         except Exception as e:
             return bool(False), f"Erro ao atualizar o comentário {comment_id}: {e}" # Usando bool explicitamente
@@ -770,7 +781,7 @@ class SheetsService:
                 return bool(True), "Comentário eliminado com sucesso." # Usando bool explicitamente
             else:
                 return bool(False), f"Comentário com ID {comment_id} não encontrado." # Usando bool explicitamente
-        except gspread.exceptions.CellNotFound:
+        except gspread.exceptions.CellNotFound: # pyright: ignore[reportAttributeAccessIssue]
             return bool(False), f"Comentário com ID {comment_id} não encontrado na planilha de comentários." # Usando bool explicitamente
         except Exception as e:
             return bool(False), f"Erro ao eliminar o comentário {comment_id}: {e}" # Usando bool explicitamente
@@ -797,4 +808,3 @@ class SheetsService:
         except Exception as e:
             print(f"Erro ao obter comentários da ocorrência {occurrence_id}: {e}") # Usando print explicitamente
             return list() # Usando list explicitamente
-
