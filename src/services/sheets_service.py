@@ -5,6 +5,7 @@
 #            Gere o acesso a diferentes abas (folhas) e tipos de ocorrências.
 #            CORRIGIDO: Lógica de filtragem para o grupo PREFEITURA e tratamento de NoneType.
 #            CORRIGIDO: Uso da chave normalizada 'registradormaingroup'.
+#            CORRIGIDO: Tratamento de cabeçalhos duplicados/vazios em _get_all_records_safe.
 # ==============================================================================
 
 import gspread # Biblioteca Python para interagir com a Google Sheets API
@@ -92,23 +93,49 @@ class SheetsService:
     def _get_all_records_safe(self, worksheet):
         """
         Lê todos os registos de uma aba de forma segura (thread-safe).
-        Normaliza as chaves dos dicionários de retorno para facilitar o acesso.
+        Normaliza as chaves dos dicionários de retorno para facilitar o acesso,
+        e garante que os cabeçalhos são únicos.
         :param worksheet: O objeto da aba (Worksheet) a ser lida.
         :return: Uma lista de dicionários, onde cada dicionário representa uma linha.
                  Cada dicionário contém chaves originais e normalizadas (minúsculas, sem espaços).
         """
         with self.gspread_lock: # Adquire o lock para garantir acesso exclusivo à aba durante a leitura
-            raw_records = worksheet.get_all_records() # Obtém todos os registos como uma lista de dicionários
-            processed_records = []
-            for rec in raw_records:
-                processed_rec = dict() # Usando dict explicitamente
-                for k, v in rec.items():
-                    original_key = k # Mantém a chave original (como está na planilha)
-                    normalized_key = k.strip().lower() # Cria uma versão normalizada (minúsculas, sem espaços)
+            # Obtém todos os valores, incluindo a linha de cabeçalho
+            all_values = worksheet.get_all_values()
+            if not all_values:
+                return []
 
-                    processed_rec[original_key] = v # Armazena o valor com a chave original
-                    if original_key != normalized_key: # Evita duplicação se a chave já for normalizada
-                        processed_rec[normalized_key] = v # Armazena o valor com a chave normalizada
+            # A primeira linha são os cabeçalhos
+            raw_headers = all_values[0]
+            data_rows = all_values[1:]
+
+            # Processa os cabeçalhos para garantir que sejam únicos e normalizados
+            processed_headers = []
+            seen_headers = {}
+            for header in raw_headers:
+                original_header = header.strip() if header else ''
+                normalized_header = original_header.lower().replace(' ', '') # Normaliza para minúsculas e sem espaços
+
+                # Garante unicidade adicionando um sufixo se já visto
+                if normalized_header in seen_headers:
+                    seen_headers[normalized_header] += 1
+                    normalized_header = f"{normalized_header}_{seen_headers[normalized_header]}"
+                else:
+                    seen_headers[normalized_header] = 0 # Inicia a contagem para este cabeçalho
+
+                processed_headers.append(normalized_header)
+
+            processed_records = []
+            for row in data_rows:
+                processed_rec = dict()
+                for i, header in enumerate(processed_headers):
+                    if i < len(row): # Garante que não há IndexError se a linha for mais curta que os cabeçalhos
+                        value = row[i]
+                        # Armazena o valor com a chave normalizada e única
+                        processed_rec[header] = value
+                        # Opcional: armazenar também com a chave original se for diferente
+                        if raw_headers[i].strip() != header:
+                             processed_rec[raw_headers[i].strip()] = value
                 processed_records.append(processed_rec)
             return processed_records
 
@@ -357,8 +384,15 @@ class SheetsService:
 
         # --- DEBUG: Informações sobre as ocorrências ---
         if all_occurrences:
-            print("OCC KEYS (primeira ocorrência):", list(all_occurrences[0].keys()))
-            print("OCC SAMPLE (primeira ocorrência):", all_occurrences[0])
+            print("DEBUG: Amostra das primeiras 2 ocorrências:")
+            for i, occ in enumerate(all_occurrences[:2]):
+                print(f"  Ocorrência {i+1}:")
+                print(f"    ID: {occ.get('id')}")
+                print(f"    Chaves disponíveis: {list(occ.keys())}")
+                print(f"    Registrador Main Group: {occ.get('registradormaingroup')}")
+                print(f"    Registrador Company: {occ.get('registradorcompany')}")
+                print(f"    Status: {occ.get('status')}")
+                print("    ---")
         else:
             print("Nenhuma ocorrência carregada.")
         # ------------------------------------------------
@@ -417,6 +451,10 @@ class SheetsService:
                 occ_group = (str(occ.get("registradormaingroup") or occ.get("RegistradorMainGroup") or "")).upper()
                 occ_id = occ.get("id", "") # Usar a chave normalizada 'id'
 
+                print(f"DEBUG PREFEITURA: Analisando ocorrência {occ_id}")
+                print(f"DEBUG PREFEITURA:    - Registrador Main Group: '{occ_group}'")
+                print(f"DEBUG PREFEITURA:    - Tipo: {occ_id}")
+
                 # Condição para incluir ocorrências:
                 # 1. Se a ocorrência foi registrada por um usuário da PREFEITURA (qualquer tipo)
                 # OU
@@ -426,15 +464,16 @@ class SheetsService:
                 if (occ_group == "PREFEITURA" or
                     (occ_id.startswith("EQUIP") and occ_group == "67_TELECOM") or
                     (occ_id.startswith("SCALL") and occ_group == "67_TELECOM")):
+                    
                     filtered_list.append(occ)
-                    print(f"DEBUG PREFEITURA: Incluindo ocorrência ID: {occ_id} (Registrador Main Group: {occ_group})")
+                    print(f"DEBUG PREFEITURA: ✅ INCLUÍDA - ID: {occ_id} (Registrador Main Group: {occ_group})")
                 else:
-                    print(f"DEBUG PREFEITURA: Excluindo ocorrência ID: {occ_id} (Não corresponde às regras da Prefeitura)")
+                    print(f"DEBUG PREFEITURA: ❌ EXCLUÍDA - ID: {occ_id} (Não corresponde às regras da Prefeitura)")
 
-            print(f"DEBUG: Grupo '{main_group}' detectado. Ocorrências filtradas: {len(filtered_list)}") # Usando print e len explicitamente
+            print(f"DEBUG: Grupo '{main_group}' detectado. Ocorrências filtradas: {len(filtered_list)}")
             return filtered_list
 
-        print(f"DEBUG: Perfil '{main_group}' não mapeado para regras de visualização. Retornando lista vazia.") # Usando print explicitamente
+        print(f"DEBUG: Perfil '{main_group}' não mapeado para regras de visualização. Retornando lista vazia.")
         return list() # Usando list explicitamente
 
     def get_active_occurrences_for_admin_dashboard(self):
