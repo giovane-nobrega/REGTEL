@@ -19,7 +19,7 @@ from googleapiclient.discovery import build
 from google.oauth2 import service_account
 
 # Importa o novo AuthManager e o date_utils
-from services.auth_manager import AuthManager
+from services.auth_manager import AuthManager # pyright: ignore[reportAttributeAccessIssue]
 from utils.date_utils import safe_fromisoformat
 
 class AuthService:

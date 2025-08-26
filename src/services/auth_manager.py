@@ -1,116 +1,65 @@
 # ==============================================================================
-# ARQUIVO: src/services/auth_manager.py
-# DESCRIÇÃO: Lida com o armazenamento seguro e persistente de dados de sessão.
+# ARQUIVO: src/services/updater.py
+# DESCRIÇÃO: Script auxiliar para baixar e executar o novo instalador da aplicação.
+#            Este script é executado pela aplicação principal quando uma atualização é detectada.
 # ==============================================================================
 
+import requests
+import sys
 import os
-import json
-import base64
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-import sys # Importado para identificar o SO
+import subprocess
+import time
+import shutil
 
-class AuthManager:
+def run_update(download_url, current_app_path):
     """
-    Gerencia o armazenamento seguro e persistente de dados de sessão
-    (como credenciais OAuth) no sistema do usuário.
+    Baixa o novo instalador e o executa.
+    :param download_url: URL direta para o novo arquivo do instalador.
+    :param current_app_path: Caminho para o diretório de instalação atual da aplicação.
     """
-    def __init__(self):
-        # Define o caminho para o arquivo de autenticação dentro da pasta .regtel
-        # Usa %APPDATA% no Windows e ~/.config ou ~/.local/share no Linux/macOS
-        if sys.platform.startswith('win'):
-            app_data_path = os.environ.get('APPDATA')
-            if not app_data_path: # Fallback se APPDATA não estiver definido
-                app_data_path = os.path.join(os.path.expanduser("~"), "AppData", "Roaming")
-            base_dir = os.path.join(app_data_path, "REGTEL")
-        else: # Linux, macOS, etc.
-            base_dir = os.path.join(os.path.expanduser("~"), ".config", "regtel")
+    print("Iniciando processo de atualização...")
+    print(f"URL de download do novo instalador: {download_url}")
+    print(f"Caminho atual da aplicação: {current_app_path}")
 
-        self.auth_file = os.path.join(base_dir, "session.auth")
+    # Define o caminho para o arquivo temporário do instalador
+    # Usamos o diretório temporário do sistema para evitar problemas de permissão
+    temp_dir = os.path.join(os.path.expanduser("~"), "AppData", "Local", "Temp", "REGTEL_Update")
+    os.makedirs(temp_dir, exist_ok=True)
+    installer_filename = download_url.split('/')[-1] # Pega o nome do arquivo da URL
+    if not installer_filename.endswith(".exe"):
+        installer_filename = "REGTEL_Installer_New.exe" # Fallback se a URL não tiver nome .exe
+    temp_installer_path = os.path.join(temp_dir, installer_filename)
+
+    try:
+        print(f"Baixando o novo instalador para: {temp_installer_path}")
+        with requests.get(download_url, stream=True) as r:
+            r.raise_for_status() # Levanta um erro para códigos de status HTTP ruins
+            with open(temp_installer_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        print("Download concluído. Iniciando o novo instalador...")
+
+        # Inicia o novo instalador em um processo separado
+        subprocess.Popen([temp_installer_path, '/SP-', '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'])
         
-        # Cria o diretório se ele não existir
-        os.makedirs(os.path.dirname(self.auth_file), exist_ok=True)
-        
-        # Chave de criptografia fixa para este sistema (gerada uma vez)
-        self.encryption_key = self._generate_encryption_key()
+        print("Novo instalador iniciado. A aplicação será atualizada.")
 
-    def _generate_encryption_key(self):
-        """
-        Gera uma chave de criptografia consistente baseada em um identificador
-        único do sistema ou usuário.
-        """
-        # Usa o SID do usuário no Windows ou UID no Linux/Mac para gerar o salt
-        # Para Windows, USERNAME é mais comum e acessível que o SID para este propósito.
-        system_id = os.environ.get('USERNAME', 'default_user_id') # Para Windows e outros
-        if hasattr(os, 'getuid'): # Para sistemas Unix-like (Linux, macOS)
-            system_id = str(os.getuid()) # pyright: ignore[reportAttributeAccessIssue]
+    except requests.exceptions.RequestException as e:
+        print(f"Erro de rede ao baixar o instalador: {e}")
+    except FileNotFoundError:
+        print(f"Erro: Arquivo do instalador não encontrado em {temp_installer_path}")
+    except Exception as e:
+        print(f"Ocorreu um erro inesperado durante a atualização: {e}")
+    
+    # É crucial que este script saia após tentar iniciar o instalador
+    sys.exit(0)
 
-        salt = system_id.encode('utf-8') # O salt deve ser único por usuário/sistema
-        
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=salt,
-            iterations=100000 # Um número alto de iterações para segurança
-        )
-        # Deriva a chave e a codifica em base64 URL-safe para uso com Fernet
-        key = base64.urlsafe_b64encode(kdf.derive(system_id.encode('utf-8')))
-        return key
-
-    def save_session(self, user_data):
-        """
-        Salva os dados da sessão criptografados no arquivo.
-        user_data deve ser um dicionário serializável em JSON.
-        """
-        try:
-            cipher = Fernet(self.encryption_key)
-            # Converte os dados para JSON e depois para bytes antes de criptografar
-            encrypted_data = cipher.encrypt(json.dumps(user_data).encode('utf-8'))
-            
-            with open(self.auth_file, 'wb') as f:
-                f.write(encrypted_data)
-            
-            # Define permissões restritas para o arquivo (apenas o proprietário pode ler/escrever)
-            if sys.platform.startswith('win'):
-                pass 
-            else: # Unix-like
-                os.chmod(self.auth_file, 0o600) # r/w para o proprietário, nada para outros
-            return True
-        except Exception as e:
-            print(f"Erro ao salvar a sessão: {e}")
-            return False
-
-    def load_session(self):
-        """
-        Carrega e descriptografa os dados da sessão do arquivo.
-        Retorna os dados da sessão (dicionário) ou None se falhar.
-        """
-        if not os.path.exists(self.auth_file):
-            return None
-            
-        try:
-            with open(self.auth_file, 'rb') as f:
-                encrypted_data = f.read()
-                
-            cipher = Fernet(self.encryption_key)
-            # Descriptografa e decodifica para string, depois carrega como JSON
-            decrypted_data = cipher.decrypt(encrypted_data).decode('utf-8')
-            return json.loads(decrypted_data)
-        except Exception as e:
-            # Captura erros de descriptografia (chave errada, arquivo corrompido)
-            # ou erros de JSON. Neste caso, a sessão é inválida.
-            print(f"Erro ao carregar/descriptografar sessão: {e}")
-            self.clear_session() # Limpa o arquivo inválido
-            return None
-
-    def clear_session(self):
-        """Remove a sessão salva do disco."""
-        if os.path.exists(self.auth_file):
-            try:
-                os.remove(self.auth_file)
-                return True
-            except Exception as e:
-                print(f"Erro ao limpar a sessão: {e}")
-                return False
-        return True
+if __name__ == "__main__":
+    # Este script espera 2 argumentos: download_url e current_app_path
+    if len(sys.argv) > 2:
+        download_url = sys.argv[1]
+        current_app_path = sys.argv[2]
+        run_update(download_url, current_app_path)
+    else:
+        print("Uso: python updater.py <download_url> <current_app_path>")
+        sys.exit(1)

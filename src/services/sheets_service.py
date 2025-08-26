@@ -5,6 +5,8 @@
 #            Gerencia o acesso a diferentes abas (planilhas) e tipos de ocorrências.
 #            CORRIGIDO: Lógica de filtragem para o grupo PREFEITURA e tratamento de NoneType.
 #            CORRIGIDO: Uso da chave normalizada 'registradormaingroup'.
+#            CORRIGIDO: Tratamento de cabeçalhos duplicados/vazios em _get_all_records_safe.
+#            CORRIGIDO: Salvamento e leitura de dados de origem/destino em Chamada Simples.
 # ==============================================================================
 
 import gspread # Biblioteca Python para interagir com a Google Sheets API
@@ -90,26 +92,60 @@ class SheetsService:
 
     def _get_all_records_safe(self, worksheet):
         """
-        Lê todos os registos de uma aba de forma segura (thread-safe).
-        Normaliza as chaves dos dicionários de retorno para facilitar o acesso.
+        Lê todos os registros de uma aba de forma segura (thread-safe).
+        Processa os cabeçalhos para garantir que sejam únicos e normalizados,
+        e constrói os dicionários de registros manualmente.
         :param worksheet: O objeto da aba (Worksheet) a ser lida.
         :return: Uma lista de dicionários, onde cada dicionário representa uma linha.
                  Cada dicionário contém chaves originais e normalizadas (minúsculas, sem espaços).
         """
         with self.gspread_lock: # Adquire o lock para garantir acesso exclusivo à aba durante a leitura
-            raw_records = worksheet.get_all_records() # Obtém todos os registos como uma lista de dicionários
-            processed_records = []
-            for rec in raw_records:
-                processed_rec = dict() # Usando dict explicitamente
-                for k, v in rec.items():
-                    original_key = k # Mantém a chave original (como está na planilha)
-                    normalized_key = k.strip().lower() # Cria uma versão normalizada (minúsculas, sem espaços)
+            try:
+                # Obtém todos os valores da planilha como uma lista de listas
+                all_values = worksheet.get_all_values()
+                if not all_values:
+                    return []
 
-                    processed_rec[original_key] = v # Armazena o valor com a chave original
-                    if original_key != normalized_key: # Evita duplicação se a chave já for normalizada
-                        processed_rec[normalized_key] = v # Armazena o valor com a chave normalizada
-                processed_records.append(processed_rec)
-            return processed_records
+                # A primeira linha são os cabeçalhos
+                raw_headers = all_values[0]
+                data_rows = all_values[1:]
+
+                # Processa os cabeçalhos para garantir que sejam únicos e normalizados
+                processed_headers = []
+                seen_headers = {}
+                for i, header in enumerate(raw_headers):
+                    original_header = header.strip() if header else f"col_{i}" # Usa um nome padrão se o cabeçalho for vazio
+                    normalized_header = original_header.lower().replace(' ', '') # Normaliza para minúsculas e sem espaços
+
+                    # Garante unicidade adicionando um sufixo se já visto
+                    if normalized_header in seen_headers:
+                        seen_headers[normalized_header] += 1
+                        normalized_header = f"{normalized_header}_{seen_headers[normalized_header]}"
+                    else:
+                        seen_headers[normalized_header] = 0 # Inicia a contagem para este cabeçalho
+
+                    processed_headers.append(normalized_header)
+
+                processed_records = []
+                for row in data_rows:
+                    processed_rec = dict()
+                    for i, header in enumerate(processed_headers):
+                        if i < len(row): # Garante que não há IndexError se a linha for mais curta que os cabeçalhos
+                            value = row[i]
+                            # Armazena o valor com a chave normalizada e única
+                            processed_rec[header] = value
+                            # Opcional: armazenar também com a chave original se for diferente (útil para depuração)
+                            if raw_headers[i].strip() != header and raw_headers[i].strip(): # Adicionado check para não adicionar chave vazia
+                                processed_rec[raw_headers[i].strip()] = value
+                    processed_records.append(processed_rec)
+                return processed_records
+            except Exception as e:
+                print(f"ERRO CRÍTICO em _get_all_records_safe para a planilha '{worksheet.title}': {e}")
+                messagebox.showerror("Erro de Leitura de Planilha", 
+                                     f"Não foi possível ler os registros da planilha '{worksheet.title}'. "
+                                     f"Verifique se a primeira linha (cabeçalho) não possui colunas vazias ou duplicadas. Detalhes: {e}")
+                return []
+
 
     def _upload_files_to_drive(self, user_credentials, file_paths):
         """

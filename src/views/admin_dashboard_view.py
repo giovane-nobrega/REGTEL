@@ -60,7 +60,7 @@ class AdminDashboardView(ctk.CTkFrame):
             title="Solicitações de Acesso",
             initial_value="...",
             row=1, column=0,
-            pady=(0, 15), # pyright: ignore[reportArgumentType]
+            pady=(0, 15),# pyright: ignore[reportArgumentType]
             command=lambda: self.controller.show_frame("AccessManagementView") 
         )
 
@@ -69,7 +69,7 @@ class AdminDashboardView(ctk.CTkFrame):
             title="Usuários Ativos",
             initial_value="...",
             row=2, column=0,
-            pady=(0, 15), # pyright: ignore[reportArgumentType]
+            pady=(0, 15),# pyright: ignore[reportArgumentType]
             command=lambda: self.controller.show_frame("UserManagementView") 
         )
 

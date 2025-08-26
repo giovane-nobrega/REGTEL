@@ -54,7 +54,7 @@ class AutocompleteEntry(ctk.CTkEntry):
             self._suggestion_listbox.destroy()
 
         parent_frame = self.winfo_toplevel()
-        if hasattr(parent_frame, 'controller') and hasattr(parent_frame.controller, 'BASE_COLOR'): # pyright: ignore[reportAttributeAccessIssue]
+        if hasattr(parent_frame, 'controller') and hasattr(parent_frame.controller, 'BASE_COLOR'):# pyright: ignore[reportAttributeAccessIssue]
             listbox_bg = parent_frame.controller.BASE_COLOR # pyright: ignore[reportAttributeAccessIssue]
             listbox_fg = parent_frame.controller.TEXT_COLOR # pyright: ignore[reportAttributeAccessIssue]
             select_bg = parent_frame.controller.PRIMARY_COLOR # pyright: ignore[reportAttributeAccessIssue]
