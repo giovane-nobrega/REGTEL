@@ -1,0 +1,49 @@
+REGTEL/
+│
+├── main.py
+│
+└── src/
+    │
+    ├── app.py
+    │
+    ├── services/
+    │   ├── __init__.py
+    │   ├── auth_service.py
+    │   ├── sheets_service.py
+    │   ├── user_service.py
+    │   └── occurrence_service.py
+    │
+    ├── views/
+    │   ├── __init__.py
+    │   │
+    │   ├── components/                 # <-- NOVO: Para widgets reutilizáveis
+    │   │   ├── __init__.py
+    │   │   ├── autocomplete_widget.py
+    │   │   └── notification_popup.py
+    │   │
+    │   ├── main/                       # <-- NOVO: Telas principais do fluxo do usuário
+    │   │   ├── __init__.py
+    │   │   ├── login_view.py
+    │   │   ├── main_menu_view.py
+    │   │   ├── history_view.py
+    │   │   └── occurrence_detail_view.py
+    │   │
+    │   ├── registration/               # <-- NOVO: Telas do fluxo de registro de ocorrências
+    │   │   ├── __init__.py
+    │   │   ├── registration_view.py    # (Chamada detalhada)
+    │   │   ├── simple_call_view.py
+    │   │   └── equipment_view.py
+    │   │
+    │   ├── management/                 # <-- NOVO: Telas de gerenciamento do administrador
+    │   │   ├── __init__.py
+    │   │   ├── admin_dashboard_view.py
+    │   │   ├── access_management_view.py
+    │   │   └── user_management_view.py
+    │   │
+    │   └── access/                     # <-- NOVO: Telas do fluxo de solicitação de acesso
+    │       ├── __init__.py
+    │       └── access_views.py         # (Contém RequestAccessView e PendingApprovalView)
+    │
+    └── utils/
+        ├── __init__.py
+        └── date_utils.py

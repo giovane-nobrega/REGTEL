@@ -22,18 +22,17 @@ def run_update(download_url, current_app_path):
     print(f"Caminho atual da aplicação: {current_app_path}")
 
     # Define o caminho para o arquivo temporário do instalador
-    # Usamos o diretório temporário do sistema para evitar problemas de permissão
     temp_dir = os.path.join(os.path.expanduser("~"), "AppData", "Local", "Temp", "REGTEL_Update")
     os.makedirs(temp_dir, exist_ok=True)
-    installer_filename = download_url.split('/')[-1] # Pega o nome do arquivo da URL
+    installer_filename = download_url.split('/')[-1]
     if not installer_filename.endswith(".exe"):
-        installer_filename = "REGTEL_Installer_New.exe" # Fallback se a URL não tiver nome .exe
+        installer_filename = "REGTEL_Installer_New.exe"
     temp_installer_path = os.path.join(temp_dir, installer_filename)
 
     try:
         print(f"Baixando o novo instalador para: {temp_installer_path}")
         with requests.get(download_url, stream=True) as r:
-            r.raise_for_status() # Levanta um erro para códigos de status HTTP ruins
+            r.raise_for_status()
             with open(temp_installer_path, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
@@ -51,11 +50,9 @@ def run_update(download_url, current_app_path):
     except Exception as e:
         print(f"Ocorreu um erro inesperado durante a atualização: {e}")
     
-    # É crucial que este script saia após tentar iniciar o instalador
     sys.exit(0)
 
 if __name__ == "__main__":
-    # Este script espera 2 argumentos: download_url e current_app_path
     if len(sys.argv) > 2:
         download_url = sys.argv[1]
         current_app_path = sys.argv[2]

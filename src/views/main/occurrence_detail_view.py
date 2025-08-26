@@ -1,7 +1,7 @@
 # ==============================================================================
 # ARQUIVO: src/views/occurrence_detail_view.py
-# DESCRIÇÃO: Contém a classe de interface para a janela (Toplevel) que exibe
-#            os detalhes completos de uma ocorrência. (VERSÃO CORRIGIDA PARA DUPLICAÇÃO DE CAMPOS)
+# DESCRIÇÃO: (VERSÃO CORRIGIDA PÓS-REFATORAÇÃO) Contém a classe de interface
+#            para a janela que exibe os detalhes de uma ocorrência.
 # ==============================================================================
 
 import customtkinter as ctk
@@ -195,7 +195,8 @@ class OccurrenceDetailView(ctk.CTkToplevel):
         for widget in self.comments_container.winfo_children():
             widget.destroy()
 
-        comments = self.controller.sheets_service.get_occurrence_comments(occurrence_id)
+        # CORREÇÃO: Chama o método do serviço de ocorrências
+        comments = self.controller.occurrence_service.get_comments(occurrence_id)
         if not comments:
             ctk.CTkLabel(self.comments_container, text="Nenhum comentário ainda.", text_color="gray60").pack(padx=10, pady=5)
             return
@@ -251,11 +252,13 @@ class OccurrenceDetailView(ctk.CTkToplevel):
             return
 
         if self.editing_comment_id:
-            success, message = self.controller.sheets_service.update_occurrence_comment(self.editing_comment_id, comment_text)
+            # CORREÇÃO: Chama o método do serviço de ocorrências
+            success, message = self.controller.occurrence_service.update_comment(self.editing_comment_id, comment_text)
             self.editing_comment_id = None
             self.add_comment_button.configure(text="Adicionar Comentário", fg_color=self.controller.PRIMARY_COLOR, hover_color=self.controller.ACCENT_COLOR)
         else:
-            success, message = self.controller.sheets_service.add_occurrence_comment(occurrence_id, user_email, user_name, comment_text)
+            # CORREÇÃO: Chama o método do serviço de ocorrências
+            success, message = self.controller.occurrence_service.add_comment(occurrence_id, user_email, user_name, comment_text)
         
         if success:
             from .notification_popup import NotificationPopup
@@ -277,7 +280,8 @@ class OccurrenceDetailView(ctk.CTkToplevel):
     def _delete_comment(self, comment_id):
         """Exclui um comentário após confirmação."""
         if messagebox.askyesno("Confirmar Exclusão", "Tem certeza que deseja excluir este comentário? Esta ação não pode ser desfeita."):
-            success, message = self.controller.sheets_service.delete_occurrence_comment(comment_id)
+            # CORREÇÃO: Chama o método do serviço de ocorrências
+            success, message = self.controller.occurrence_service.delete_comment(comment_id)
             if success:
                 from .notification_popup import NotificationPopup
                 NotificationPopup(self.master, message=message, type="success")
