@@ -1,12 +1,12 @@
 # ==============================================================================
-# FICHEIRO: src/app.py
+# ARQUIVO: src/app.py
 # DESCRIÇÃO: Controlador principal da aplicação. (VERSÃO COM ÍCONE DA JANELA E POLIMENTO DE LOGIN)
 #            ATUALIZADO para integrar as novas Views de Gerenciamento de Acessos e Usuários.
 #            ATUALIZADO para suportar filtro de ocorrências por status.
 # ==============================================================================
 
 import customtkinter as ctk
-import tkinter as tk  # NOVO: Importado para tk.TclError
+import tkinter as tk
 from tkinter import messagebox
 import threading
 import os
@@ -17,18 +17,18 @@ import time # NOVO: Para pausas no processo de atualização
 from builtins import super, print, Exception, hasattr, len, max, range, int, str, dict, open # CORRIGIDO: Importa built-ins explicitamente para satisfazer o Pylance
 
 # Importações dos módulos de serviço e das views
-from services.auth_service import AuthService # Importado explicitamente
-from services.sheets_service import SheetsService # Importado explicitamente
-from views.access_views import RequestAccessView, PendingApprovalView # Importado explicitamente
-from views.admin_dashboard_view import AdminDashboardView # Importado explicitamente
-from views.equipment_view import EquipmentView # Importado explicitamente
-from views.history_view import HistoryView # Importado explicitamente
-from views.login_view import LoginView # Importado explicitamente
-from views.main_menu_view import MainMenuView # Importado explicitamente
-from views.occurrence_detail_view import OccurrenceDetailView # Importado explicitamente
-from views.registration_view import RegistrationView # Importado explicitamente
-from views.simple_call_view import SimpleCallView # Importado explicitamente
-from views.notification_popup import NotificationPopup # Importado explicitamente
+from services.auth_service import AuthService
+from services.sheets_service import SheetsService
+from views.access_views import RequestAccessView, PendingApprovalView
+from views.admin_dashboard_view import AdminDashboardView
+from views.equipment_view import EquipmentView
+from views.history_view import HistoryView
+from views.login_view import LoginView
+from views.main_menu_view import MainMenuView
+from views.occurrence_detail_view import OccurrenceDetailView
+from views.registration_view import RegistrationView
+from views.simple_call_view import SimpleCallView
+from views.notification_popup import NotificationPopup
 
 # NOVAS IMPORTAÇÕES PARA AS VIEWS DE GERENCIAMENTO
 from views.access_management_view import AccessManagementView
@@ -43,8 +43,8 @@ class App(ctk.CTk):
         os.makedirs(log_dir, exist_ok=True) # Cria o diretório se não existir
         self.log_file_path = os.path.join(log_dir, "app_debug.log")
 
-        # Abre o ficheiro de log em modo de escrita, com encoding UTF-8.
-        # Redireciona sys.stdout e sys.stderr para este ficheiro.
+        # Abre o arquivo de log em modo de escrita, com encoding UTF-8.
+        # Redireciona sys.stdout e sys.stderr para este arquivo.
         try:
             self._log_file = open(self.log_file_path, 'w', encoding='utf-8')
             sys.stdout = self._log_file
@@ -52,15 +52,15 @@ class App(ctk.CTk):
             print(f"--- REGTEL Debug Log Iniciado em: {self.log_file_path} ---")
         except Exception as e:
             # Se não conseguir abrir o log, imprime no console original (se houver)
-            # e exibe uma messagebox para o utilizador.
+            # e exibe uma messagebox para o usuário.
             sys.stdout = sys.__stdout__ # Restaura stdout para o original
             sys.stderr = sys.__stderr__ # Restaura stderr para o original
-            print(f"ERRO: Não foi possível iniciar o log para o ficheiro: {self.log_file_path}. Detalhes: {e}")
+            print(f"ERRO: Não foi possível iniciar o log para o arquivo: {self.log_file_path}. Detalhes: {e}")
             messagebox.showerror("Erro de Log", f"Não foi possível iniciar o log da aplicação. Detalhes: {e}")
 
         # Inicializa a classe pai CustomTkinter
         super().__init__()
-        self.title("Plataforma de Registro de Ocorrências (REGTEL)") # Nome do programa atualizado para REGTEL
+        self.title("Plataforma de Registro de Ocorrências (REGTEL)")
         self.geometry("900x750")
         self.minsize(800, 650)
 
@@ -82,10 +82,9 @@ class App(ctk.CTk):
         self.configure(fg_color=self.BASE_COLOR)
 
         # --- CONFIGURAÇÃO DO ÍCONE DA JANELA ---
-        # Caminho para o ficheiro do ícone.
+        # Caminho para o arquivo do ícone.
         # Para PyInstaller, sys._MEIPASS é o caminho para os recursos empacotados.
         # Para desenvolvimento, é o diretório raiz do script.
-        # CORREÇÃO: Usar getattr para acessar _MEIPASS de forma segura.
         if getattr(sys, '_MEIPASS', None):
             base_path = sys._MEIPASS # pyright: ignore[reportAttributeAccessIssue]
         else:
@@ -95,11 +94,9 @@ class App(ctk.CTk):
 
         try:
             # Tenta definir o ícone. Use .ico para Windows, .png para outros sistemas ou se preferir.
-            # CORREÇÃO: Capturar tk.TclError, que é a exceção padrão para problemas de Tkinter/ícone.
             self.iconbitmap(icon_path)
-        except tk.TclError as e: # CORREÇÃO: Usar tk.TclError
+        except tk.TclError as e:
             print(f"Aviso: Não foi possível carregar o ícone da janela em '{icon_path}'. Erro: {e}")
-            # Pode optar por não mostrar messagebox aqui para evitar interrupção no startup
         except Exception as e:
             print(f"Aviso: Ocorreu um erro inesperado ao definir o ícone da janela: {e}")
 
@@ -143,35 +140,31 @@ class App(ctk.CTk):
         # --- NOVO: Configurações de Atualização ---
         self.CURRENT_APP_VERSION = "1.0.2" # Versão atual da sua aplicação
         
-        # URL para o ficheiro version.txt que contém a versão mais recente (ex: "1.0.2")
-        # IMPORTANTE: Este URL DEVE ser para um ficheiro RAW content de um REPOSITÓRIO PÚBLICO, SEM TOKENS.
-        self.REMOTE_VERSION_URL = "https://raw.githubusercontent.com/giovane-nobrega/REGTEL/master/updates/version.txt" # URL fornecida pelo utilizador
+        # URL para o arquivo version.txt que contém a versão mais recente (ex: "1.0.2")
+        self.REMOTE_VERSION_URL = "https://raw.githubusercontent.com/giovane-nobrega/REGTEL/master/updates/version.txt"
         
-        # URL direta para o novo ficheiro do instalador (ex: REGTEL_Installer_1.0.2.exe)
-        # Este URL também deve ser público (ex: de um GitHub Release Asset).
-        self.NEW_INSTALLER_DOWNLOAD_URL = "https://github.com/giovane-nobrega/REGTEL/releases/download/v1.0.2/REGTEL_Installer_1.0.2.exe" # Exemplo de URL de Release do seu repositório
+        # URL direta para o novo arquivo do instalador (ex: REGTEL_Installer_1.0.2.exe)
+        self.NEW_INSTALLER_DOWNLOAD_URL = "https://github.com/giovane-nobrega/REGTEL/releases/download/v1.0.2/REGTEL_Installer_1.0.2.exe"
 
         # Inicia a verificação de atualização em uma thread separada após um pequeno atraso
         self.after(2000, lambda: threading.Thread(target=self.check_for_updates, daemon=True).start())
 
 
-    def show_frame(self, page_name, from_view=None, mode="all"): # Adicionado 'mode' para HistoryView
+    def show_frame(self, page_name, from_view=None, mode="all"):
         """
         Mostra uma tela específica da aplicação e guarda a tela anterior para navegação de "voltar".
         :param page_name: O nome da classe da tela a ser mostrada (ex: "MainMenuView").
         :param from_view: O nome da tela de onde a navegação foi iniciada, se aplicável.
         :param mode: O modo de exibição para HistoryView ("all" ou "pending").
         """
-        # Se from_view for fornecido e for diferente da tela atual, atualiza previous_frame_name
         if from_view and self.current_frame and from_view != page_name:
             self.previous_frame_name = from_view
-        elif not from_view: # Se não foi especificado de onde veio, limpa o previous_frame_name
+        elif not from_view:
             self.previous_frame_name = None
 
 
         frame = self.frames[page_name]
         if hasattr(frame, 'on_show'):
-            # Se a tela for HistoryView, passe o nome da tela anterior E o modo
             if page_name == "HistoryView":
                 frame.on_show(self.previous_frame_name, mode=mode)
             else:
@@ -192,7 +185,6 @@ class App(ctk.CTk):
             messagebox.showerror("Erro", "Não foi possível encontrar os detalhes da ocorrência.")
 
     def check_initial_login(self):
-        # Aprimoramento da mensagem para guiar o utilizador
         self.frames["LoginView"].set_loading_state("Verificando credenciais...")
         threading.Thread(target=self._check_initial_login_thread, daemon=True).start()
 
@@ -214,7 +206,6 @@ class App(ctk.CTk):
             self.after(0, self.frames["RegistrationView"].set_operator_suggestions, self.operator_list)
 
     def perform_login(self):
-        # Mensagem de feedback melhorada para o utilizador
         self.frames["LoginView"].set_loading_state("Aguarde... Uma janela do navegador foi aberta para autenticação. Por favor, complete o login e retorne ao aplicativo.")
         threading.Thread(target=self._run_login_flow_in_thread, daemon=True).start()
 
@@ -224,25 +215,20 @@ class App(ctk.CTk):
             self.auth_service.save_user_credentials(creds)
             self.credentials = creds
 
-            # --- NOVO: LÓGICA PARA TRAZER A APLICAÇÃO PARA O PRIMEIRO PLANO ---
-            self.after(0, self.deiconify)   # Garante que a janela não está minimizada
-            self.after(0, self.lift)        # Traz a janela para a frente de outras
-            self.after(0, self.focus_force) # Força o foco para a janela
-            # ------------------------------------------------------------------
+            self.after(0, self.deiconify)
+            self.after(0, self.lift)
+            self.after(0, self.focus_force)
 
-            # Chama o próximo passo na thread principal
             self.after(0, self._fetch_user_profile)
         else:
             self.after(0, lambda: messagebox.showerror("Falha no Login", "O processo de login foi cancelado ou falhou. Por favor, tente novamente."))
             self.after(0, self.frames["LoginView"].set_default_state)
 
     def _fetch_user_profile(self):
-        # Garante que self.user_email é sempre uma string
         self.user_email = str(self.auth_service.get_user_email(self.credentials))
-        # print(f"DEBUG (App): Email obtido do auth_service: '{self.user_email}'") # DEBUG PRINT REMOVIDO
 
-        if "Erro" in self.user_email or not self.user_email.strip(): # Verifica se há erro ou se está vazio
-            self.after(0, lambda: messagebox.showerror("Erro de Autenticação", "Não foi possível obter o seu e-mail. Por favor, tente novamente ou contacte o o suporte."))
+        if "Erro" in self.user_email or not self.user_email.strip():
+            self.after(0, lambda: messagebox.showerror("Erro de Autenticação", "Não foi possível obter o seu e-mail. Por favor, tente novamente ou contate o suporte."))
             self.after(0, self.perform_logout)
             return
 
@@ -258,8 +244,7 @@ class App(ctk.CTk):
             self.load_secondary_data()
 
             main_menu = self.frames["MainMenuView"]
-            # Passa a versão da aplicação para o MainMenuView
-            main_menu.update_user_info(self.user_email, self.user_profile, self.CURRENT_APP_VERSION) # Passando self.CURRENT_APP_VERSION
+            main_menu.update_user_info(self.user_email, self.user_profile, self.CURRENT_APP_VERSION)
 
             if main_group == "67_TELECOM" and sub_group == "SUPER_ADMIN":
                 self.show_frame("AdminDashboardView")
@@ -270,55 +255,47 @@ class App(ctk.CTk):
         elif status == "pending":
             self.show_frame("PendingApprovalView")
         else:
-            # Assegurar que RequestAccessView esteja no estado correto ao ser mostrada
             self.frames["RequestAccessView"].on_show()
             self.show_frame("RequestAccessView")
 
     def perform_logout(self):
         self.auth_service.logout()
         self.credentials = None
-        self.user_email = None # Define como None ao fazer logout
+        self.user_email = None
         self.user_profile = {}
         self.show_frame("LoginView")
         self.frames["LoginView"].set_default_state()
 
     def submit_access_request(self, full_name, username, main_group, sub_group, company_name=None):
-        # --- AQUI ESTÁ A VALIDAÇÃO ADICIONADA ---
-        # print(f"DEBUG (App): User email before submitting access request: '{self.user_email}'") # DEBUG PRINT REMOVIDO
         if not self.user_email or self.user_email.strip() == "" or "Erro" in self.user_email:
             messagebox.showerror("Erro Crítico", "Não foi possível obter seu e-mail. Por favor, tente fazer login novamente.")
-            self.perform_logout() # Força o logout para iniciar o fluxo de login
+            self.perform_logout()
             return
-        # ----------------------------------------
 
         success, message = self.sheets_service.request_access(self.user_email, full_name, username, main_group, sub_group, company_name)
         if success:
-            # Passar as cores explicitamente
             NotificationPopup(self, message="Solicitação enviada com sucesso! Aguarde aprovação.", type="success",
-                              bg_color_success="green", text_color_success="white", # Exemplo de cores para sucesso
-                              bg_color_info="gray", text_color_info="white") # Exemplo de cores para info
+                              bg_color_success="green", text_color_success="white",
+                              bg_color_info="gray", text_color_info="white")
             self.show_frame("PendingApprovalView")
         else:
             if "já existe para este e-mail" in message:
-                messagebox.showerror("E-mail Já Registrado", "Este e-mail já está registado em nosso sistema. Por favor, utilize outro e-mail ou entre em contacto com o administrador para assistência.")
+                messagebox.showerror("E-mail Já Registrado", "Este e-mail já está registrado em nosso sistema. Por favor, utilize outro e-mail ou entre em contato com o administrador para assistência.")
             else:
                 messagebox.showerror("Erro ao Enviar Solicitação", f"Não foi possível enviar sua solicitação de acesso: {message}\nPor favor, verifique seus dados e tente novamente.")
 
-    def get_all_occurrences(self, force_refresh=False, exclude_statuses=None): # NOVO: Adicionado exclude_statuses
+    def get_all_occurrences(self, force_refresh=False, exclude_statuses=None):
         """
-        Obtém as ocorrências visíveis para o utilizador logado,
+        Obtém as ocorrências visíveis para o usuário logado,
         filtrando com base no seu perfil e excluindo status específicos, se fornecido.
         :param force_refresh: Se True, força o recarregamento dos dados do Google Sheets.
         :param exclude_statuses: Lista de status (strings) a serem excluídos da lista final.
         :return: Lista de ocorrências filtradas.
         """
         if force_refresh or self.occurrences_cache is None:
-            # Chama a função de filtragem por utilizador do SheetsService
             self.occurrences_cache = self.sheets_service.get_occurrences_by_user(self.user_email)
         
-        # Aplica o filtro de exclusão de status, se houver
         if exclude_statuses:
-            # Garante que a comparação de status seja case-insensitive
             exclude_statuses_upper = [s.upper() for s in exclude_statuses]
             return [occ for occ in self.occurrences_cache if occ.get('Status', '').upper() not in exclude_statuses_upper]
         
@@ -335,17 +312,14 @@ class App(ctk.CTk):
         self.sheets_service.update_user_status(email, new_status)
         self.users_cache = None
         if new_status == 'approved':
-            # Passar as cores explicitamente
             NotificationPopup(self, message=f"O acesso para {email} foi aprovado com sucesso.", type="success",
                               bg_color_success="green", text_color_success="white",
                               bg_color_info="gray", text_color_info="white")
         else:
-            # Passar as cores explicitamente
             NotificationPopup(self, message=f"O acesso para {email} foi rejeitado.", type="info",
                               bg_color_success="green", text_color_success="white",
                               bg_color_info="gray", text_color_info="white")
-        self.frames["AccessManagementView"].load_access_requests() # CORREÇÃO: Chamar load_access_requests diretamente na view
-        # self.frames["AdminDashboardView"].load_access_requests() # REMOVIDO: Não é mais necessário aqui
+        self.frames["AccessManagementView"].load_access_requests()
 
     def save_occurrence_status_changes(self, changes):
         if not changes:
@@ -354,14 +328,11 @@ class App(ctk.CTk):
         success, message = self.sheets_service.batch_update_occurrence_statuses(changes)
         if success:
             self.occurrences_cache = None
-            # Passar as cores explicitamente
             NotificationPopup(self, message=f"Os status de {len(changes)} ocorrência(s) foram salvos com sucesso.", type="success",
                               bg_color_success="green", text_color_success="white",
                               bg_color_info="gray", text_color_info="white")
-            # Força o recarregamento da aba de ocorrências no AdminDashboardView
             if "AdminDashboardView" in self.frames and self.frames["AdminDashboardView"]._occurrences_tab_initialized:
                 self.frames["AdminDashboardView"].load_all_occurrences(force_refresh=True)
-            # Também recarrega o histórico para consistência
             if "HistoryView" in self.frames:
                 self.frames["HistoryView"].load_history()
         else:
@@ -374,22 +345,17 @@ class App(ctk.CTk):
         success, message = self.sheets_service.batch_update_user_profiles(changes)
         if success:
             self.users_cache = None
-            # Passar as cores explicitamente
             NotificationPopup(self, message=f"{len(changes)} perfil(is) de usuário foram atualizados com sucesso.", type="success",
                               bg_color_success="green", text_color_success="white",
                               bg_color_info="gray", text_color_info="white")
-            self.frames["UserManagementView"].load_all_users(force_refresh=True) # CORREÇÃO: Chamar load_all_users diretamente na view
-            # self.frames["AdminDashboardView"].load_all_users(force_refresh=True) # REMOVIDO: Não é mais necessário aqui
+            self.frames["UserManagementView"].load_all_users(force_refresh=True)
         else:
             messagebox.showerror("Erro ao Salvar", f"Ocorreu um erro ao atualizar os perfis: {message}")
 
     def get_user_occurrences(self):
-        # Este método agora é redundante, pois get_all_occurrences já faz a filtragem por usuário.
-        # No entanto, se for chamado, deve retornar o cache filtrado.
         return self.get_all_occurrences()
 
     def get_current_user_profile(self):
-        # Sempre busca o perfil mais recente para garantir permissões atualizadas
         return self.sheets_service.check_user_status(self.user_email)
 
     def submit_simple_call_occurrence(self, form_data):
@@ -436,7 +402,6 @@ class App(ctk.CTk):
 
         if success:
             self.occurrences_cache = None
-            # Passar as cores explicitamente
             NotificationPopup(self, message=message, type="success",
                               bg_color_success="green", text_color_success="white",
                               bg_color_info="gray", text_color_info="white")
@@ -452,14 +417,12 @@ class App(ctk.CTk):
         """
         success, message = self.sheets_service.update_occurrence_status(occurrence_id, new_status)
         if success:
-            self.occurrences_cache = None # Limpa o cache para forçar recarregamento
+            self.occurrences_cache = None
             NotificationPopup(self, message=f"Status da ocorrência {occurrence_id} atualizado para '{new_status}'.", type="success",
                               bg_color_success="green", text_color_success="white",
                               bg_color_info="gray", text_color_info="white")
-            # Recarrega o histórico para refletir a mudança
             if "HistoryView" in self.frames:
                 self.frames["HistoryView"].load_history()
-            # Se o AdminDashboardView estiver aberto, força o recarregamento também
             if "AdminDashboardView" in self.frames and self.frames["AdminDashboardView"]._occurrences_tab_initialized:
                 self.frames["AdminDashboardView"].load_all_occurrences(force_refresh=True)
         else:
@@ -471,17 +434,15 @@ class App(ctk.CTk):
         """
         try:
             response = requests.get(self.REMOTE_VERSION_URL, timeout=5)
-            response.raise_for_status() # Levanta um erro para códigos de status HTTP ruins (4xx ou 5xx)
+            response.raise_for_status()
             remote_version = response.text.strip()
 
             if remote_version and self._compare_versions(remote_version, self.CURRENT_APP_VERSION) > 0:
-                # Nova versão disponível
                 self.after(0, lambda: self._prompt_for_update(remote_version))
             else:
                 print("REGTEL: Nenhuma atualização disponível ou já está na versão mais recente.")
         except requests.exceptions.RequestException as e:
             print(f"REGTEL: Erro ao verificar atualizações: {e}")
-            # Não mostra erro ao utilizador para falhas de verificação de atualização silenciosas
         except Exception as e:
             print(f"REGTEL: Erro inesperado na verificação de atualização: {e}")
 
@@ -507,76 +468,58 @@ class App(ctk.CTk):
 
     def _prompt_for_update(self, remote_version):
         """
-        Pergunta ao utilizador se deseja atualizar a aplicação.
+        Pergunta ao usuário se deseja atualizar a aplicação.
         """
         if messagebox.askyesno(
             "Atualização Disponível",
             f"Uma nova versão do REGTEL ({remote_version}) está disponível!\n"
-            "Deseja descarregar e instalar a atualização agora?\n\n"
+            "Deseja baixar e instalar a atualização agora?\n\n"
             "A aplicação será fechada para iniciar o processo de atualização."
         ):
             self.initiate_update()
         else:
-            NotificationPopup(self, message="Atualização adiada. Pode verificar novamente mais tarde.", type="info",
+            NotificationPopup(self, message="Atualização adiada. Você pode verificar novamente mais tarde.", type="info",
                               bg_color_info="gray", text_color_info="white")
 
     def initiate_update(self):
         """
         Inicia o script de atualização e fecha a aplicação principal.
         """
-        # Determina o caminho para o script updater.py
-        # CORREÇÃO: Usar getattr para acessar _MEIPASS de forma segura.
         if getattr(sys, '_MEIPASS', None):
-            # Se estiver num executável PyInstaller, o updater.py estará no diretório temporário
-            updater_script_path = os.path.join(sys._MEIPASS, 'services', 'updater.py') # pyright: ignore[reportAttributeAccessIssue] # Ajustado o caminho para services/updater.py
+            updater_script_path = os.path.join(sys._MEIPASS, 'services', 'updater.py') # pyright: ignore[reportAttributeAccessIssue]
         else:
-            # Em ambiente de desenvolvimento, o updater.py está em src/services
             updater_script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'services', 'updater.py'))
         
-        # O caminho para o executável atual da aplicação
-        current_app_executable = sys.executable # sys.executable é o caminho para o executável atual (python.exe ou REGTEL.exe)
+        current_app_executable = sys.executable
         
-        # NOVO: Passa o caminho do diretório de instalação da aplicação para o updater
-        # Se for um onefile, o path é o diretório do executável
-        # Se for um onedir, é o diretório raiz da distribuição
-        # CORREÇÃO: Usar getattr para acessar _MEIPASS de forma segura.
         if getattr(sys, '_MEIPASS', None):
-            # Em PyInstaller onefile, sys._MEIPASS é o diretório temporário onde os ficheiros são extraídos
-            # O executável real está em sys.executable. O diretório de instalação é o diretório do executável.
             app_install_dir = os.path.dirname(sys.executable)
         else:
-            # Em desenvolvimento, o diretório de instalação é o diretório raiz do projeto
             app_install_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 
         try:
-            # Lança o script updater.py como um processo separado
-            # Usamos 'pythonw.exe' no Windows para evitar uma janela de console
-            # sys.executable aponta para o interpretador Python ou para o executável PyInstaller
             if sys.platform.startswith('win'):
-                # Tenta usar pythonw.exe para evitar a janela de console
                 python_exe = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
                 if not os.path.exists(python_exe):
-                    python_exe = sys.executable # Fallback para python.exe ou o próprio executável
+                    python_exe = sys.executable
                 
                 subprocess.Popen([
                     python_exe,
                     updater_script_path,
                     self.NEW_INSTALLER_DOWNLOAD_URL,
-                    app_install_dir # Passa o diretório de instalação
+                    app_install_dir
                 ], shell=False, creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
             else:
-                # Para Linux/macOS, executa diretamente com o interpretador
                 subprocess.Popen([
                     sys.executable,
                     updater_script_path,
                     self.NEW_INSTALLER_DOWNLOAD_URL,
-                    app_install_dir # Passa o diretório de instalação
+                    app_install_dir
                 ], shell=False)
 
             print("REGTEL: Iniciando processo de atualização. A aplicação será fechada.")
-            self.quit() # Fecha a aplicação principal
+            self.quit()
         except Exception as e:
             messagebox.showerror("Erro de Atualização", f"Não foi possível iniciar o processo de atualização: {e}")
             print(f"REGTEL: Erro ao iniciar o updater: {e}")
-

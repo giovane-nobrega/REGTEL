@@ -1,6 +1,6 @@
 # ==============================================================================
-# FICHEIRO: src/views/equipment_view.py
-# DESCRIÇÃO: Contém a classe de interface para o formulário de registo
+# ARQUIVO: src/views/equipment_view.py
+# DESCRIÇÃO: Contém a classe de interface para o formulário de registro
 #            de ocorrências de suporte técnico de equipamento.
 #            (VERSÃO COM VALIDAÇÃO PROATIVA E CORES)
 # ==============================================================================
@@ -11,33 +11,29 @@ import re
 
 class EquipmentView(ctk.CTkFrame):
     """
-    Tela para utilizadores da Prefeitura registarem problemas relacionados
+    Tela para usuários da Prefeitura registrarem problemas relacionados
     com equipamentos físicos, com validação proativa.
     """
     def __init__(self, parent, controller):
-        super().__init__(parent) # Removido fg_color do super().__init__
+        super().__init__(parent)
         self.controller = controller
 
-        # Definir a cor de fundo após a inicialização do super
         self.configure(fg_color=self.controller.BASE_COLOR)
 
         self.attachment_paths = []
 
-        # --- Configuração da Responsividade ---
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1) 
 
-        ctk.CTkLabel(self, text="Registar Suporte Técnico de Equipamento",
+        ctk.CTkLabel(self, text="Registrar Suporte Técnico de Equipamento",
                      font=ctk.CTkFont(size=24, weight="bold"),
                      text_color=self.controller.TEXT_COLOR).grid(row=0, column=0, padx=20, pady=(10, 20), sticky="ew")
 
-        # --- Frame Principal do Formulário ---
-        form_frame = ctk.CTkFrame(self, fg_color="gray15") # Fundo do formulário
+        form_frame = ctk.CTkFrame(self, fg_color="gray15")
         form_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
         form_frame.grid_columnconfigure(1, weight=1)
-        form_frame.grid_rowconfigure(4, weight=1) # Permite que a caixa de descrição expanda
+        form_frame.grid_rowconfigure(4, weight=1)
 
-        # --- Campos do Formulário ---
         ctk.CTkLabel(form_frame, text="Tipo de Equipamento:", text_color=self.controller.TEXT_COLOR).grid(
             row=0, column=0, padx=10, pady=10, sticky="w")
         self.equip_type = ctk.CTkComboBox(form_frame, values=[
@@ -80,22 +76,20 @@ class EquipmentView(ctk.CTkFrame):
         self.equip_description.grid(
             row=4, column=1, padx=10, pady=10, sticky="nsew")
 
-        # --- Secção de Anexos ---
-        attachment_frame = ctk.CTkFrame(self, fg_color="gray15") # Fundo da seção de anexos
+        attachment_frame = ctk.CTkFrame(self, fg_color="gray15")
         attachment_frame.grid(row=2, column=0, padx=20, pady=5, sticky="ew")
         ctk.CTkLabel(attachment_frame, text="Anexar Imagens (Opcional):",
                      font=ctk.CTkFont(weight="bold"),
                      text_color=self.controller.TEXT_COLOR).pack(side="left", padx=(10,5), pady=10)
         
-        attach_button = ctk.CTkButton(attachment_frame, text="Selecionar Ficheiros...", command=self._select_files,
+        attach_button = ctk.CTkButton(attachment_frame, text="Selecionar Arquivos...", command=self._select_files,
                                       fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
                                       hover_color=self.controller.ACCENT_COLOR)
         attach_button.pack(side="left", padx=5, pady=10)
 
-        self.attachment_label = ctk.CTkLabel(attachment_frame, text="Nenhum ficheiro selecionado.", text_color="gray60")
+        self.attachment_label = ctk.CTkLabel(attachment_frame, text="Nenhum arquivo selecionado.", text_color="gray60")
         self.attachment_label.pack(side="left", padx=5, pady=10)
 
-        # --- Botões de Ação ---
         button_frame = ctk.CTkFrame(self, fg_color="transparent")
         button_frame.grid(row=3, column=0, padx=20, pady=(10, 10), sticky="ew")
         button_frame.grid_columnconfigure((0, 1), weight=1)
@@ -106,12 +100,11 @@ class EquipmentView(ctk.CTkFrame):
         self.back_button.grid(row=0, column=0, padx=(0, 5), sticky="ew")
 
         self.submit_button = ctk.CTkButton(
-            button_frame, text="Registar Problema", command=self.submit, height=40,
+            button_frame, text="Registrar Problema", command=self.submit, height=40,
             fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
             hover_color=self.controller.ACCENT_COLOR)
         self.submit_button.grid(row=0, column=1, padx=(5, 0), sticky="ew")
 
-        # --- Configuração da Lógica de Validação ---
         self.default_border_color = self.equip_model.cget("border_color")
         self.equip_ramal.bind("<FocusOut>", lambda event: self._validate_numeric_field(self.equip_ramal))
         self.equip_model.bind("<FocusOut>", lambda event: self._validate_required_field(self.equip_model))
@@ -155,17 +148,17 @@ class EquipmentView(ctk.CTkFrame):
             return True
 
     def _select_files(self):
-        """Abre uma janela para o utilizador selecionar ficheiros de imagem."""
+        """Abre uma janela para o usuário selecionar arquivos de imagem."""
         filepaths = filedialog.askopenfilenames(
             title="Selecione as imagens",
             filetypes=[("Imagens", "*.png *.jpg *.jpeg")]
         )
         if filepaths:
             self.attachment_paths = list(filepaths)
-            self.attachment_label.configure(text=f"{len(filepaths)} ficheiro(s) selecionado(s).")
+            self.attachment_label.configure(text=f"{len(filepaths)} arquivo(s) selecionado(s).")
         else:
             self.attachment_paths = []
-            self.attachment_label.configure(text="Nenhum ficheiro selecionado.")
+            self.attachment_label.configure(text="Nenhum arquivo selecionado.")
 
     def on_show(self):
         """Limpa o formulário e restaura o estado visual sempre que a tela é exibida."""
@@ -176,9 +169,8 @@ class EquipmentView(ctk.CTkFrame):
         self.equip_description.delete("1.0", "end")
         
         self.attachment_paths = []
-        self.attachment_label.configure(text="Nenhum ficheiro selecionado.")
+        self.attachment_label.configure(text="Nenhum arquivo selecionado.")
         
-        # Restaura as cores das bordas
         self.equip_type.configure(border_color=self.default_border_color)
         self.equip_model.configure(border_color=self.default_border_color)
         self.equip_ramal.configure(border_color=self.default_border_color)
@@ -189,7 +181,6 @@ class EquipmentView(ctk.CTkFrame):
 
     def submit(self):
         """Coleta os dados, valida todos os campos e os envia para o controlador."""
-        # Executa todas as validações novamente antes de submeter
         is_type_valid = self._validate_required_combobox(self.equip_type)
         is_model_valid = self._validate_required_field(self.equip_model)
         is_ramal_valid = self._validate_numeric_field(self.equip_ramal)
@@ -212,8 +203,7 @@ class EquipmentView(ctk.CTkFrame):
     def set_submitting_state(self, is_submitting):
         """Ativa/desativa os botões durante o processo de envio."""
         if is_submitting:
-            self.submit_button.configure(state="disabled", text="A Enviar...")
+            self.submit_button.configure(state="disabled", text="Enviando...")
         else:
             self.submit_button.configure(
-                state="normal", text="Registar Problema")
-
+                state="normal", text="Registrar Problema")

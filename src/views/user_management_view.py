@@ -1,5 +1,5 @@
 # ==============================================================================
-# FICHEIRO: src/views/user_management_view.py
+# ARQUIVO: src/views/user_management_view.py
 # DESCRIÇÃO: Contém a classe de interface para a tela de Gerenciamento de Usuários.
 #            (VERSÃO OTIMIZADA PARA CARREGAMENTO EM SEGUNDO PLANO)
 # ==============================================================================
@@ -13,8 +13,8 @@ from builtins import super, list, Exception, print, str, hasattr, len
 
 class UserManagementView(ctk.CTkFrame):
     """
-    Tela para administradores gerenciarem todos os utilizadores registados.
-    Permite visualizar, filtrar e editar perfis de utilizadores.
+    Tela para administradores gerenciarem todos os usuários registrados.
+    Permite visualizar, filtrar e editar perfis de usuários.
     """
     def __init__(self, parent, controller):
         super().__init__(parent)
@@ -22,11 +22,9 @@ class UserManagementView(ctk.CTkFrame):
 
         self.configure(fg_color=self.controller.BASE_COLOR)
 
-        # Dicionários para armazenar o estado original e os widgets de atualização
         self.original_profiles = {}
         self.profile_updaters = {}
 
-        # Listas de opções para ComboBoxes
         self.partner_companies = ["M2 TELECOMUNICAÇÕES", "MDA FIBRA", "DISK SISTEMA TELECOM", "GMN TELECOM"]
         self.prefeitura_dept_list = ["SECRETARIA DE SAUDE", "SECRETARIA DE OBRAS", "DEPARTAMENTO DE TI", "GUARDA MUNICIPAL", "GABINETE DO PREFEITO", "OUTRO"]
         self.partner_subgroup_map = {
@@ -37,7 +35,6 @@ class UserManagementView(ctk.CTkFrame):
         }
         self.telecom_subgroups_for_admin = ["SUPER_ADMIN", "ADMIN", "MANAGER", "67_TELECOM_USER", "67_INTERNET_USER"]
 
-        # --- Layout Principal ---
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
@@ -45,19 +42,16 @@ class UserManagementView(ctk.CTkFrame):
                      font=ctk.CTkFont(size=24, weight="bold"),
                      text_color=self.controller.TEXT_COLOR).grid(row=0, column=0, padx=20, pady=(10, 10), sticky="ew")
 
-        # Frame de busca
         user_filter_frame = ctk.CTkFrame(self, fg_color="gray15")
         user_filter_frame.grid(row=1, column=0, pady=(0, 10), padx=20, sticky="ew")
         user_filter_frame.grid_columnconfigure(0, weight=1)
-        self.search_user_entry = ctk.CTkEntry(user_filter_frame, placeholder_text="Nome, e-mail ou username...")
+        self.search_user_entry = ctk.CTkEntry(user_filter_frame, placeholder_text="Nome, e-mail ou nome de usuário...")
         self.search_user_entry.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
         self.search_user_entry.bind("<KeyRelease>", self.filter_users_admin)
 
-        # Frame rolável para a lista de usuários
         self.all_users_frame = ctk.CTkScrollableFrame(self, label_text="Carregando usuários...")
         self.all_users_frame.grid(row=2, column=0, pady=10, padx=20, sticky="nsew")
 
-        # Botões de ação
         user_buttons_frame = ctk.CTkFrame(self, fg_color="transparent")
         user_buttons_frame.grid(row=3, column=0, pady=(0, 10), padx=20, sticky="ew")
         user_buttons_frame.grid_columnconfigure((0, 1), weight=1)
@@ -72,7 +66,6 @@ class UserManagementView(ctk.CTkFrame):
     def filter_users_admin(self, event=None):
         """Filtra a lista de usuários com base no cache local."""
         search_term = self.search_user_entry.get().lower()
-        # Usa o cache do controller que já foi carregado
         all_users = self.controller.get_all_users() 
         if not all_users:
             all_users = []
@@ -82,21 +75,16 @@ class UserManagementView(ctk.CTkFrame):
     def load_all_users(self, force_refresh=False):
         """Inicia o processo de carregamento de usuários em uma thread separada."""
         self.all_users_frame.configure(label_text="Carregando usuários...")
-        # Limpa a lista antiga antes de carregar a nova
         for widget in self.all_users_frame.winfo_children():
             widget.destroy()
         self.update_idletasks()
-        # Inicia a thread que fará a chamada de rede
         threading.Thread(target=self._load_users_thread, args=(force_refresh,), daemon=True).start()
 
     def _load_users_thread(self, force_refresh):
         """
-        Esta função é executada na thread em segundo plano.
-        Ela busca os dados e depois agenda a atualização da UI na thread principal.
+        Busca os dados e depois agenda a atualização da UI na thread principal.
         """
-        # A chamada de rede demorada acontece aqui, em segundo plano
         all_users_list = self.controller.get_all_users(force_refresh)
-        # Agenda a função _populate_all_users para ser executada na thread principal
         self.after(0, self._populate_all_users, all_users_list)
 
     def _populate_all_users(self, all_users_list):
@@ -236,4 +224,3 @@ class UserManagementView(ctk.CTkFrame):
             self.controller.update_user_profile(changes)
         else:
             messagebox.showinfo("Nenhuma Alteração", "Nenhum perfil foi alterado.")
-

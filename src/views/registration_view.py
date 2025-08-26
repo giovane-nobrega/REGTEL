@@ -1,6 +1,6 @@
 # ==============================================================================
-# FICHEIRO: src/views/registration_view.py
-# DESCRIÇÃO: Contém a classe de interface para o formulário de registo
+# ARQUIVO: src/views/registration_view.py
+# DESCRIÇÃO: Contém a classe de interface para o formulário de registro
 #            detalhado de ocorrências de chamada. (DESTAQUE DE EDIÇÃO E CORES)
 # ==============================================================================
 import customtkinter as ctk
@@ -11,24 +11,21 @@ import re
 
 class RegistrationView(ctk.CTkFrame):
     def __init__(self, parent, controller):
-        super().__init__(parent) # Removido fg_color do super().__init__
+        super().__init__(parent)
         self.controller = controller
 
-        # Definir a cor de fundo após a inicialização do super
         self.configure(fg_color=self.controller.BASE_COLOR)
 
-        # --- ESTRUTURA DE LAYOUT PRINCIPAL ---
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
 
-        main_occurrence_frame = ctk.CTkFrame(self, fg_color="gray15") # Fundo do frame de ocorrência principal
+        main_occurrence_frame = ctk.CTkFrame(self, fg_color="gray15")
         main_occurrence_frame.grid(row=0, column=0, padx=10, pady=(10, 5), sticky="ew")
 
-        # --- ALTERAÇÃO AQUI: Frame de teste agora é uma variável de instância ---
-        self.test_entry_frame = ctk.CTkFrame(self, fg_color="gray15") # Fundo do frame de entrada de teste
+        self.test_entry_frame = ctk.CTkFrame(self, fg_color="gray15")
         self.test_entry_frame.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
 
-        test_list_frame = ctk.CTkFrame(self, fg_color="gray15") # Fundo do frame da lista de testes
+        test_list_frame = ctk.CTkFrame(self, fg_color="gray15")
         test_list_frame.grid(row=2, column=0, padx=10, pady=5, sticky="nsew")
         test_list_frame.grid_rowconfigure(1, weight=1)
         test_list_frame.grid_columnconfigure(0, weight=1)
@@ -123,10 +120,10 @@ class RegistrationView(ctk.CTkFrame):
 
         self.entry_teste_num_a.bind("<FocusOut>", lambda event: self._validate_phone_number(self.entry_teste_num_a))
         self.entry_teste_num_b.bind("<FocusOut>", lambda event: self._validate_phone_number(self.entry_teste_num_b))
-        self.entry_teste_obs.bind("<FocusOut>", lambda event: self._validate_required_field(self.entry_teste_obs)) # Added validation for obs
-        self.entry_op_a.bind("<FocusOut>", lambda event: self._validate_required_field(self.entry_op_a)) # Added validation for op_a
-        self.entry_op_b.bind("<FocusOut>", lambda event: self._validate_required_field(self.entry_op_b)) # Added validation for op_b
-        self.combo_teste_status.configure(command=lambda choice: self._validate_required_field(self.combo_teste_status)) # Added validation for status combo
+        self.entry_teste_obs.bind("<FocusOut>", lambda event: self._validate_required_field(self.entry_teste_obs))
+        self.entry_op_a.bind("<FocusOut>", lambda event: self._validate_required_field(self.entry_op_a))
+        self.entry_op_b.bind("<FocusOut>", lambda event: self._validate_required_field(self.entry_op_b))
+        self.combo_teste_status.configure(command=lambda choice: self._validate_required_field(self.combo_teste_status))
 
     def _validate_required_field(self, widget):
         """Valida se um campo (Entry/ComboBox/Textbox) não está vazio."""
@@ -145,12 +142,10 @@ class RegistrationView(ctk.CTkFrame):
 
     def _validate_phone_number(self, widget):
         phone_number = widget.get()
-        # Permite campo vazio para validação, mas deve ser checado no add_or_update_test
         if not phone_number.strip():
             widget.configure(border_color=self.default_border_color)
             return True
 
-        # ALTERAÇÃO: Remove a restrição de 11 dígitos. Agora aceita qualquer número de dígitos, desde que sejam apenas números.
         if not re.fullmatch(r'^\d+$', phone_number):
             widget.configure(border_color="red")
             messagebox.showwarning("Formato Inválido", "O número de telefone deve conter apenas dígitos.")
@@ -200,11 +195,9 @@ class RegistrationView(ctk.CTkFrame):
         self.entry_op_a.configure(border_color=self.default_border_color)
         self.entry_op_b.configure(border_color=self.default_border_color)
         self.combo_teste_status.configure(border_color=self.default_border_color)
-        # --- ALTERAÇÃO AQUI: Remove o destaque ao limpar ---
         self.test_entry_frame.configure(border_width=0)
 
     def add_or_update_test(self):
-        # Re-validar todos os campos do teste antes de adicionar/atualizar
         is_horario_valid = self._validate_horario_live()
         is_num_a_valid = self._validate_phone_number(self.entry_teste_num_a)
         is_op_a_valid = self._validate_required_field(self.entry_op_a)
@@ -225,7 +218,6 @@ class RegistrationView(ctk.CTkFrame):
         status = self.combo_teste_status.get().upper()
         obs = self.entry_teste_obs.get().upper()
 
-        # NOVA VALIDAÇÃO: Impedir que número de origem e destino sejam iguais
         if num_a == num_b:
             messagebox.showwarning("Números Iguais", "O número de origem (A) e o número de destino (B) não podem ser os mesmos.")
             self.entry_teste_num_a.configure(border_color="red")
@@ -265,7 +257,7 @@ class RegistrationView(ctk.CTkFrame):
 
         self.scrollable_test_list.configure(label_text="", label_text_color=self.controller.TEXT_COLOR)
         for index, teste in enumerate(self.controller.testes_adicionados):
-            card_frame = ctk.CTkFrame(self.scrollable_test_list, fg_color="gray20") # Fundo dos cards
+            card_frame = ctk.CTkFrame(self.scrollable_test_list, fg_color="gray20")
             card_frame.pack(fill="x", pady=5, padx=5)
             card_frame.grid_columnconfigure(0, weight=1)
 
@@ -310,13 +302,11 @@ class RegistrationView(ctk.CTkFrame):
         self.combo_teste_status.set(teste_para_editar['status'])
         self.entry_teste_obs.insert(0, teste_para_editar['obs'])
         self.add_test_button.configure(text="✔ Atualizar Teste",
-                                       fg_color="green", hover_color="darkgreen") # Cor de sucesso para o botão
-        # --- ALTERAÇÃO AQUI: Adiciona o destaque visual ---
+                                       fg_color="green", hover_color="darkgreen")
         self.test_entry_frame.configure(border_color="green", border_width=2)
 
     def submit(self):
         title = self.entry_ocorrencia_titulo.get().upper()
-        # Validação do título da ocorrência
         if not title.strip():
             messagebox.showwarning("Campo Obrigatório", "O título da ocorrência é obrigatório.")
             self.entry_ocorrencia_titulo.configure(border_color="red")
@@ -324,8 +314,6 @@ class RegistrationView(ctk.CTkFrame):
         else:
             self.entry_ocorrencia_titulo.configure(border_color=self.default_border_color)
 
-        # --- NOVA VALIDAÇÃO PARA TESTES DE LIGAÇÃO ---
-        # Verifica se os campos de teste estão preenchidos mas não foram adicionados à lista
         current_test_fields_filled = (
             self.entry_teste_horario.get().strip() != "" or
             self.entry_teste_num_a.get().strip() != "" or
@@ -336,13 +324,11 @@ class RegistrationView(ctk.CTkFrame):
             self.entry_teste_obs.get().strip() != ""
         )
 
-        if current_test_fields_filled and self.controller.editing_index is None: # Se há algo nos campos e não está em modo de edição
+        if current_test_fields_filled and self.controller.editing_index is None:
             messagebox.showwarning("Teste Não Adicionado", "Você preencheu os campos de teste, mas não os adicionou à lista. Por favor, clique em '+ Adicionar Teste' antes de registrar a ocorrência completa.")
-            self.test_entry_frame.configure(border_color="red", border_width=2) # Destaca o frame de teste
+            self.test_entry_frame.configure(border_color="red", border_width=2)
             return
-        # --- FIM DA NOVA VALIDAÇÃO ---
 
-        # Validação de que há pelo menos 1 teste adicionado (e 3 para Parceiros)
         if not self.controller.testes_adicionados:
             messagebox.showwarning("Testes Obrigatórios", "É necessário adicionar pelo menos um teste para registrar a ocorrência.")
             return
@@ -353,12 +339,11 @@ class RegistrationView(ctk.CTkFrame):
             messagebox.showwarning("Validação Falhou", "Para o perfil de Parceiro, é necessário adicionar pelo menos 3 testes.")
             return
 
-        # print(f"DEBUG (RegistrationView): Testes a serem enviados: {self.controller.testes_adicionados}") # DEBUG PRINT REMOVIDO
         self.controller.submit_full_occurrence(title)
 
     def set_submitting_state(self, is_submitting):
         if is_submitting:
-            self.submit_button.configure(state="disabled", text="A Enviar...")
+            self.submit_button.configure(state="disabled", text="Enviando...")
         else:
             self.submit_button.configure(state="normal", text="Registrar Ocorrência Completa")
 
@@ -368,9 +353,7 @@ class RegistrationView(ctk.CTkFrame):
         if not horario_str:
             self.horario_valido = True
             self.entry_teste_horario.configure(border_color=self.default_border_color)
-            # A ativação/desativação do botão de adicionar teste depende de todas as validações de campo
-            # então não vamos habilitar/desabilitar aqui isoladamente
-            return True # Retorna True para não bloquear outras validações apenas por estar vazio
+            return True
 
         digits = "".join(filter(str.isdigit, horario_str))
         is_error = False

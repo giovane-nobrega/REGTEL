@@ -1,5 +1,5 @@
 # ==============================================================================
-# FICHEIRO: src/views/admin_dashboard_view.py
+# ARQUIVO: src/views/admin_dashboard_view.py
 # DESCRIÇÃO: Contém a classe de interface para o Dashboard de Gestão,
 #            agora baseado em cards dinâmicos para uma visão geral rápida.
 #            ATUALIZADO para navegar para as novas Views de gestão.
@@ -13,7 +13,6 @@ from tkinter import messagebox
 import threading
 from datetime import datetime
 import re
-# Importa built-ins explicitamente para satisfazer o Pylance
 from builtins import super, list, Exception, print, str, hasattr, len, any, ValueError, sum
 
 
@@ -31,69 +30,55 @@ class AdminDashboardView(ctk.CTkFrame):
         super().__init__(parent)
         self.controller = controller
 
-        # Configuração da cor de fundo da tela
         self.configure(fg_color=self.controller.BASE_COLOR)
 
-        # Configuração de responsividade do grid principal
-        self.grid_rowconfigure(1, weight=1)  # Linha para o cards_container_frame expandir
-        self.grid_rowconfigure(2, weight=0)  # Linha para o botão "Voltar ao Menu" não expandir
-        self.grid_columnconfigure(0, weight=1) # Coluna principal
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(2, weight=0)
+        self.grid_columnconfigure(0, weight=1)
 
-        # Título principal do dashboard
         ctk.CTkLabel(self, text="Dashboard de Gestão",
                      font=ctk.CTkFont(size=24, weight="bold"),
                      text_color=self.controller.TEXT_COLOR).grid(row=0, column=0, padx=20, pady=(10, 10), sticky="ew")
 
-        # Frame para conter os cards dinâmicos
         self.cards_container_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.cards_container_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
         
-        # CORREÇÃO: Configura o grid do container de cards para ter 1 coluna
         self.cards_container_frame.grid_columnconfigure(0, weight=1)
-        # Configura as linhas para os cards empilhados
         self.cards_container_frame.grid_rowconfigure((0, 1, 2), weight=0) 
 
-        # --- Criação dos Cards Dinâmicos ---
-        # Card de Ocorrências Pendentes
         self.pending_occurrences_card_label = self._create_dashboard_card(
             parent_frame=self.cards_container_frame,
             title="Ocorrências Pendentes",
             initial_value="...",
-            row=0, column=0, # Primeira linha, primeira coluna
-            pady=(0, 15), # Ajuste de espaçamento # pyright: ignore[reportArgumentType]
+            row=0, column=0,
+            pady=(0, 15), # pyright: ignore[reportArgumentType]
             command=lambda: self.controller.show_frame("HistoryView", from_view="AdminDashboardView", mode="pending")
         )
 
-        # Card de Solicitações de Acesso Pendentes
         self.pending_access_card_label = self._create_dashboard_card(
             parent_frame=self.cards_container_frame,
             title="Solicitações de Acesso",
             initial_value="...",
-            row=1, column=0, # Segunda linha, primeira coluna
-            pady=(0, 15), # Ajuste de espaçamento # pyright: ignore[reportArgumentType]
+            row=1, column=0,
+            pady=(0, 15), # pyright: ignore[reportArgumentType]
             command=lambda: self.controller.show_frame("AccessManagementView") 
         )
 
-        # Card de Utilizadores Ativos
         self.active_users_card_label = self._create_dashboard_card(
             parent_frame=self.cards_container_frame,
-            title="Utilizadores Ativos",
+            title="Usuários Ativos",
             initial_value="...",
-            row=2, column=0, # Terceira linha, primeira coluna
-            pady=(0, 15), # Ajuste de espaçamento # pyright: ignore[reportArgumentType]
+            row=2, column=0,
+            pady=(0, 15), # pyright: ignore[reportArgumentType]
             command=lambda: self.controller.show_frame("UserManagementView") 
         )
 
-        # REMOVIDO: O Card "Ver Histórico Completo" foi removido conforme a solicitação.
-
-        # Botão para voltar ao menu principal (mantido na parte inferior)
         back_button = ctk.CTkButton(self, text="Voltar ao Menu",
                                     command=lambda: self.controller.show_frame("MainMenuView"),
                                     fg_color=self.controller.GRAY_BUTTON_COLOR,
                                     text_color=self.controller.TEXT_COLOR,
                                     hover_color=self.controller.GRAY_HOVER_COLOR,
                                     height=40) 
-        # CORREÇÃO: Mude sua posição no grid principal para row=2, column=0 (abaixo do container de cards)
         back_button.grid(row=2, column=0, pady=(0, 10), padx=20, sticky="ew")
 
     def _create_dashboard_card(self, parent_frame, title, initial_value, row, column, command=None, pady=10):
@@ -109,9 +94,9 @@ class AdminDashboardView(ctk.CTkFrame):
         :return: O widget CTkLabel que exibe o valor, para que possa ser atualizado dinamicamente.
         """
         card_frame = ctk.CTkFrame(parent_frame, fg_color="gray15", corner_radius=10)
-        card_frame.grid(row=row, column=column, padx=10, pady=pady, sticky="ew") # Alterado sticky para "ew" e adicionado pady
-        card_frame.grid_columnconfigure(0, weight=1) # Permite que o conteúdo do card se expanda
-        card_frame.grid_rowconfigure(2, weight=0) # Adiciona uma linha para o botão
+        card_frame.grid(row=row, column=column, padx=10, pady=pady, sticky="ew")
+        card_frame.grid_columnconfigure(0, weight=1)
+        card_frame.grid_rowconfigure(2, weight=0)
 
         ctk.CTkLabel(card_frame, text=title, font=ctk.CTkFont(size=16, weight="bold"),
                      text_color=self.controller.TEXT_COLOR).grid(row=0, column=0, pady=(10, 5))
@@ -127,7 +112,7 @@ class AdminDashboardView(ctk.CTkFrame):
                                           hover_color=self.controller.ACCENT_COLOR)
             action_button.grid(row=2, column=0, pady=(5, 10), padx=10, sticky="ew")
         
-        return value_label # Retorna o label para que seu texto possa ser atualizado
+        return value_label
 
     def on_show(self):
         """
@@ -135,9 +120,8 @@ class AdminDashboardView(ctk.CTkFrame):
         Carrega os dados para os cards dinâmicos.
         """
         print("DEBUG: AdminDashboardView exibida. Carregando dados para os cards...")
-        self.update_idletasks() # Força a atualização da UI para mostrar "..."
+        self.update_idletasks()
 
-        # Inicia o carregamento de dados para cada card em threads separadas
         threading.Thread(target=self._load_pending_occurrences_count, daemon=True).start()
         threading.Thread(target=self._load_pending_access_requests_count, daemon=True).start()
         threading.Thread(target=self._load_active_users_count, daemon=True).start()
@@ -164,38 +148,24 @@ class AdminDashboardView(ctk.CTkFrame):
 
     def _load_active_users_count(self):
         """
-        Busca a contagem de utilizadores ativos (aprovados) e atualiza o card correspondente.
+        Busca a contagem de usuários ativos (aprovados) e atualiza o card correspondente.
         """
-        print("DEBUG: Buscando contagem de utilizadores ativos...")
+        print("DEBUG: Buscando contagem de usuários ativos...")
         all_users = self.controller.get_all_users(force_refresh=True)
         active_count = sum(1 for user in all_users if user.get('status', '').upper() == 'APPROVED')
         self.after(0, lambda: self.active_users_card_label.configure(text=f"{active_count}"))
-        print(f"DEBUG: Utilizadores ativos: {active_count}")
-
-    # --- Métodos de Salvamento (mantidos, mas acessados via navegação ou botões dedicados) ---
-    # Estes métodos não são diretamente chamados pelos cards de resumo,
-    # mas seriam chamados por uma tela de detalhe ou gestão específica.
+        print(f"DEBUG: Usuários ativos: {active_count}")
 
     def save_profile_changes(self):
         """
-        Coleta as alterações de perfil dos utilizadores e as envia para o controlador para salvamento em lote.
-        Implementa lógica para garantir a consistência de main_group, sub_group e company.
+        Coleta as alterações de perfil dos usuários e as envia para o controlador para salvamento em lote.
         """
-        # Esta lógica seria chamada de uma tela de "Gerenciar Usuários" mais detalhada.
-        messagebox.showinfo("Funcionalidade", "Esta função seria ativada a partir de uma tela de gestão de utilizadores mais detalhada.")
+        messagebox.showinfo("Funcionalidade", "Esta função seria ativada a partir de uma tela de gestão de usuários mais detalhada.")
         print("DEBUG: save_profile_changes chamado (simulado).")
-        # Exemplo de como a lógica de salvamento seria:
-        # changes = {}
-        # # ... (lógica de coleta de mudanças dos widgets de edição) ...
-        # if changes:
-        #     self.controller.update_user_profile(changes)
-        # else:
-        #     messagebox.showinfo("Nenhuma Alteração", "Nenhum perfil foi alterado.")
 
     def save_status_changes(self):
         """
         Salva as alterações de status das ocorrências que foram modificadas no dashboard.
         """
-        # Esta lógica seria chamada de uma tela de "Gerenciar Ocorrências" mais detalhada.
         messagebox.showinfo("Funcionalidade", "Esta função seria ativada a partir de uma tela de gestão de ocorrências mais detalhada.")
         print("DEBUG: save_status_changes chamado (simulado).")
