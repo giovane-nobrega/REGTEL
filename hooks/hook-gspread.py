@@ -5,4 +5,5 @@
 
 from PyInstaller.utils.hooks import copy_metadata
 
+# Copia os metadados da biblioteca gspread, que são necessários para o seu funcionamento
 datas = copy_metadata('gspread')

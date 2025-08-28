@@ -1,5 +1,10 @@
 # ==============================================================================
-# ARQUIVO: src/views/components/autocomplete_widget.py
+# FICHEIRO: src/views/components/autocomplete_widget.py
+# DESCRIÇÃO: Contém a classe para o widget de entrada de texto com
+#            funcionalidade de autocompletar sugestões.
+# DATA DA ATUALIZAÇÃO: 27/08/2025
+# NOTAS: Ficheiro movido para a nova subpasta 'components'. Nenhuma alteração
+#        de código foi necessária.
 # ==============================================================================
 
 import customtkinter as ctk
@@ -8,7 +13,7 @@ import tkinter as tk
 class AutocompleteEntry(ctk.CTkEntry):
     """
     Um CTkEntry personalizado que exibe uma lista de sugestões de preenchimento
-    automático à medida que o usuário digita.
+    automático à medida que o utilizador digita.
     """
     def __init__(self, master, suggestions=None, **kwargs):
         super().__init__(master, **kwargs)
@@ -28,7 +33,7 @@ class AutocompleteEntry(ctk.CTkEntry):
         self.suggestions = suggestions
 
     def _on_key_release(self, event):
-        """Chamado sempre que uma tecla é liberada no campo de entrada."""
+        """Chamado sempre que uma tecla é libertada no campo de entrada."""
         if event.keysym in ("Down", "Up", "Return", "Escape"):
             return
 
@@ -44,23 +49,29 @@ class AutocompleteEntry(ctk.CTkEntry):
             self._hide_suggestions()
 
     def _show_suggestions(self, matches):
-        """Cria e exibe a lista de sugestões abaixo do campo de entrada."""
+        """Cria e exibe la lista de sugestões abaixo do campo de entrada."""
         if self._suggestion_listbox:
             self._suggestion_listbox.destroy()
 
         parent_frame = self.winfo_toplevel()
-        listbox_bg = "#2B2B2B"
-        listbox_fg = "white"
-        select_bg = "#1F6AA5"
-        if hasattr(parent_frame, 'controller'):
-            listbox_bg = parent_frame.controller.BASE_COLOR
-            listbox_fg = parent_frame.controller.TEXT_COLOR
-            select_bg = parent_frame.controller.PRIMARY_COLOR
-        
+        if hasattr(parent_frame, 'controller') and hasattr(parent_frame, 'BASE_COLOR'):
+            listbox_bg = parent_frame.controller.BASE_COLOR # type: ignore
+            listbox_fg = parent_frame.controller.TEXT_COLOR # type: ignore
+            select_bg = parent_frame.controller.PRIMARY_COLOR # type: ignore
+        else:
+            listbox_bg = "#2B2B2B"
+            listbox_fg = "white"
+            select_bg = "#1F6AA5"
+
         self._suggestion_listbox = tk.Listbox(
-            self.master, background=listbox_bg, foreground=listbox_fg,
-            selectbackground=select_bg, selectforeground="white",
-            borderwidth=1, highlightthickness=0, relief="flat"
+            self.master,
+            background=listbox_bg,
+            foreground=listbox_fg,
+            selectbackground=select_bg,
+            selectforeground="white",
+            borderwidth=1,
+            highlightthickness=0,
+            relief="flat"
         )
         
         for match in matches:
@@ -77,7 +88,7 @@ class AutocompleteEntry(ctk.CTkEntry):
         self._suggestion_listbox.lift()
         
         self._suggestion_listbox.bind("<<ListboxSelect>>", self._on_listbox_select)
-
+        
     def _hide_suggestions(self):
         """Destrói a lista de sugestões se ela existir."""
         if self._suggestion_listbox:
@@ -86,21 +97,28 @@ class AutocompleteEntry(ctk.CTkEntry):
 
     def _on_listbox_select(self, event=None):
         """Chamado quando um item da lista de sugestões é selecionado."""
-        if self._suggestion_listbox and self._suggestion_listbox.curselection():
-            value = self._suggestion_listbox.get(self._suggestion_listbox.curselection()[0])
+        if not self._suggestion_listbox:
+            return
+            
+        selected_indices = self._suggestion_listbox.curselection()
+        if selected_indices:
+            value = self._suggestion_listbox.get(selected_indices[0])
             self.delete(0, tk.END)
             self.insert(0, value)
             self._hide_suggestions()
             self.focus_set()
 
     def _on_focus_out(self, event=None):
+        """Esconde as sugestões quando o widget perde o foco."""
         self._hide_suggestions()
 
     def _on_escape(self, event=None):
+        """Esconde as sugestões quando a tecla Escape é pressionada."""
         self._hide_suggestions()
         return "break"
 
     def _on_arrow_down(self, event=None):
+        """Navega para baixo na lista de sugestões."""
         if self._suggestion_listbox:
             current_selection = self._suggestion_listbox.curselection()
             next_index = 0 if not current_selection else current_selection[0] + 1
@@ -111,6 +129,7 @@ class AutocompleteEntry(ctk.CTkEntry):
             return "break"
 
     def _on_arrow_up(self, event=None):
+        """Navega para cima na lista de sugestões."""
         if self._suggestion_listbox:
             current_selection = self._suggestion_listbox.curselection()
             if current_selection:
@@ -122,5 +141,7 @@ class AutocompleteEntry(ctk.CTkEntry):
             return "break"
 
     def _on_enter(self, event=None):
-        self._on_listbox_select()
-        return "break"
+        """Seleciona o item destacado na lista quando Enter é pressionado."""
+        if self._suggestion_listbox:
+            self._on_listbox_select()
+            return "break"

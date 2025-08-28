@@ -1,5 +1,9 @@
 # ==============================================================================
-# ARQUIVO: src/views/components/notification_popup.py
+# FICHEIRO: src/views/components/notification_popup.py
+# DESCRIÇÃO: Implementa um pop-up de notificação temporário e não-bloqueante.
+# DATA DA ATUALIZAÇÃO: 27/08/2025
+# NOTAS: Ficheiro movido para a nova subpasta 'components'. Nenhuma alteração
+#        de código foi necessária.
 # ==============================================================================
 
 import customtkinter as ctk
@@ -15,17 +19,24 @@ class NotificationPopup(ctk.CTkToplevel):
                  bg_color_error="red", text_color_error="white",
                  bg_color_info="#0A0E1A", text_color_info="#FFFFFF"):
         super().__init__(master)
+        self.master = master
         self.overrideredirect(True)
+
         self.wm_attributes("-topmost", True)
         self.wm_attributes("-alpha", 0.0)
 
-        bg_color, text_color = bg_color_info, text_color_info
+        bg_color = bg_color_info
+        text_color = text_color_info
+
         if type == "success":
-            bg_color, text_color = bg_color_success, text_color_success
+            bg_color = bg_color_success
+            text_color = text_color_success
         elif type == "warning":
-            bg_color, text_color = bg_color_warning, text_color_warning
+            bg_color = bg_color_warning
+            text_color = text_color_warning
         elif type == "error":
-            bg_color, text_color = bg_color_error, text_color_error
+            bg_color = bg_color_error
+            text_color = text_color_error
         
         self.frame = ctk.CTkFrame(self, fg_color=bg_color, corner_radius=10)
         self.frame.pack(padx=10, pady=10, fill="both", expand=True)

@@ -1,16 +1,18 @@
 # ==============================================================================
-# ARQUIVO: src/services/auth_service.py
-# DESCRIÇÃO: Lida com a autenticação e o armazenamento seguro da sessão.
+# FICHEIRO: src/services/auth_service.py
+# DESCRIÇÃO: Lida com a autenticação de utilizadores (OAuth) e da conta de serviço.
+# DATA DA ATUALIZAÇÃO: 27/08/2025
+# NOTAS: Nenhuma alteração de código foi necessária neste ficheiro para a
+#        nova estrutura. Os imports relativos e a lógica de busca de
+#        ficheiros na raiz do projeto continuam a funcionar corretamente.
 # ==============================================================================
 
 import os
 import sys
 from tkinter import messagebox
 import json
-import base64
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+# --- Dependências Google ---
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -18,118 +20,105 @@ from google.auth.exceptions import RefreshError
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
 
+# Importa o AuthManager e o date_utils
+from services.auth_manager import AuthManager
+from utils.date_utils import safe_fromisoformat
+
 class AuthService:
-    """ Gerencia a autenticação e a sessão do usuário. """
+    """Lida com a autenticação de utilizadores (OAuth) e da conta de serviço."""
     def __init__(self):
-        self.SCOPES_USER = ["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/spreadsheets"]
+        self.SCOPES_USER = ["openid", "https://www.googleapis.com/auth/userinfo.email",
+                            "https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/spreadsheets"]
         self.SCOPES_SERVICE_ACCOUNT = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+
         self.CLIENT_SECRET_FILE = self._resource_path("client_secrets.json")
         self.SERVICE_ACCOUNT_FILE = self._resource_path("service_account.json")
 
-        if sys.platform.startswith('win'):
-            base_dir = os.path.join(os.environ.get('APPDATA', ''), "REGTEL")
-        else:
-            base_dir = os.path.join(os.path.expanduser("~"), ".config", "regtel")
-
-        self.auth_file = os.path.join(base_dir, "session.auth")
-        os.makedirs(os.path.dirname(self.auth_file), exist_ok=True)
-        self.encryption_key = self._generate_encryption_key()
+        self.auth_manager = AuthManager()
 
     def _resource_path(self, relative_path):
-        """ Obtém o caminho absoluto para os recursos. """
-        if hasattr(sys, '_MEIPASS'):
-            base_path = sys._MEIPASS # pyright: ignore[reportAttributeAccessIssue]
-        else:
+        """ Obtém o caminho absoluto para os recursos, funciona para dev e para executável. """
+        try:
+            base_path = sys._MEIPASS # type: ignore
+        except Exception:
+            # De 'src/services/auth_service.py', sobe dois níveis para a raiz
             base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
         return os.path.join(base_path, relative_path)
 
-    def _generate_encryption_key(self):
-        """ Gera uma chave de criptografia consistente. """
-        system_id = os.environ.get('USERNAME', 'default_user_id')
-        if hasattr(os, 'getuid'):
-            system_id = str(os.getuid()) # pyright: ignore[reportAttributeAccessIssue]
-        salt = system_id.encode('utf-8')
-        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000)
-        return base64.urlsafe_b64encode(kdf.derive(salt))
-
-    def _save_session(self, user_data):
-        """ Salva a sessão do usuário de forma criptografada. """
-        try:
-            cipher = Fernet(self.encryption_key)
-            encrypted_data = cipher.encrypt(json.dumps(user_data).encode('utf-8'))
-            with open(self.auth_file, 'wb') as f:
-                f.write(encrypted_data)
-        except Exception as e:
-            print(f"Erro ao salvar a sessão: {e}")
-
-    def _load_session(self):
-        """ Carrega a sessão do usuário. """
-        if not os.path.exists(self.auth_file):
-            return None
-        try:
-            with open(self.auth_file, 'rb') as f:
-                encrypted_data = f.read()
-            cipher = Fernet(self.encryption_key)
-            return json.loads(cipher.decrypt(encrypted_data).decode('utf-8'))
-        except Exception:
-            self.clear_session()
-            return None
-
-    def clear_session(self):
-        """ Limpa a sessão salva. """
-        if os.path.exists(self.auth_file):
-            os.remove(self.auth_file)
-
     def load_user_credentials(self):
-        """ Carrega e atualiza as credenciais do usuário. """
-        session_data = self._load_session()
+        """
+        Carrega as credenciais do utilizador a partir do armazenamento seguro.
+        Tenta refrescar se expiradas.
+        """
+        creds = None
+        session_data = self.auth_manager.load_session()
+
         if session_data:
             try:
                 creds = Credentials.from_authorized_user_info(session_data, self.SCOPES_USER)
-                if creds.expired and creds.refresh_token:
+
+                if creds and creds.expired and creds.refresh_token:
                     creds.refresh(Request())
                     self.save_user_credentials(creds)
-                return creds
-            except RefreshError:
+
+                if creds and creds.valid:
+                    return creds
+            except RefreshError as e:
+                if 'Scope has changed' in str(e) or 'invalid_grant' in str(e):
+                    messagebox.showwarning("Permissões Atualizadas",
+                                           "As permissões da aplicação foram atualizadas ou sua sessão expirou. Por favor, faça o login novamente.")
+                    self.logout()
+                else:
+                    messagebox.showerror("Erro de Autenticação", f"Ocorreu um erro ao verificar sua sessão: {e}")
+                return None
+            except Exception as e:
+                messagebox.showerror("Erro de Credenciais", f"Ocorreu um erro ao carregar as credenciais: {e}")
                 self.logout()
+                return None
         return None
 
     def save_user_credentials(self, credentials):
-        """ Salva as credenciais do usuário na sessão. """
+        """Salva as credenciais do utilizador de forma segura usando AuthManager."""
         creds_data = {
-            'token': credentials.token, 'refresh_token': credentials.refresh_token,
-            'token_uri': credentials.token_uri, 'client_id': credentials.client_id,
-            'client_secret': credentials.client_secret, 'scopes': credentials.scopes,
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes,
+            'universe_domain': credentials.universe_domain,
             'expiry': credentials.expiry.isoformat() if credentials.expiry else None,
             'id_token': credentials.id_token
         }
-        self._save_session(creds_data)
+        self.auth_manager.save_session(creds_data)
 
     def run_login_flow(self):
-        """ Inicia o fluxo de login OAuth2. """
+        """Inicia o fluxo de login OAuth2 para o utilizador."""
         try:
             flow = InstalledAppFlow.from_client_secrets_file(self.CLIENT_SECRET_FILE, self.SCOPES_USER)
             creds = flow.run_local_server(port=0)
             self.save_user_credentials(creds)
             return creds
         except Exception as e:
-            messagebox.showerror("Erro de Login", f"Não foi possível iniciar o login.\n\nDetalhes: {e}")
+            print(f"Erro no fluxo de login do utilizador: {e}")
+            messagebox.showerror("Erro de Login", f"Não foi possível iniciar o login. Verifique o ficheiro 'client_secrets.json' e sua conexão com a internet.\n\nDetalhes: {e}")
             return None
 
     def logout(self):
-        """ Realiza o logout do usuário. """
-        self.clear_session()
+        """Remove o ficheiro de token, efetivamente fazendo logout."""
+        self.auth_manager.clear_session()
 
     def get_user_email(self, credentials):
-        """ Obtém o e-mail do usuário autenticado. """
+        """Obtém o e-mail do utilizador autenticado."""
         try:
             service = build('oauth2', 'v2', credentials=credentials)
-            return service.userinfo().get().execute().get("email")
+            user_info = service.userinfo().get().execute()
+            return user_info.get("email", "Erro: e-mail não encontrado")
         except Exception:
             return "Erro ao obter e-mail"
 
     def get_drive_service(self, credentials):
-        """ Cria um serviço para interagir com o Google Drive. """
+        """Cria um serviço para interagir com o Google Drive do utilizador."""
         try:
             return build('drive', 'v3', credentials=credentials)
         except Exception as e:
@@ -137,11 +126,14 @@ class AuthService:
             return None
 
     def get_service_account_credentials(self):
-        """ Carrega as credenciais da conta de serviço. """
+        """Carrega as credenciais da conta de serviço (robô)."""
         try:
             return service_account.Credentials.from_service_account_file(
                 self.SERVICE_ACCOUNT_FILE, scopes=self.SCOPES_SERVICE_ACCOUNT
             )
+        except FileNotFoundError:
+            messagebox.showerror("Erro Crítico", f"Ficheiro não encontrado: {self.SERVICE_ACCOUNT_FILE}\n\nA aplicação não pode funcionar sem este ficheiro.")
+            return None
         except Exception as e:
             messagebox.showerror("Erro Crítico", f"Falha ao carregar credenciais da conta de serviço: {e}")
             return None

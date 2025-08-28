@@ -261,7 +261,7 @@ class OccurrenceDetailView(ctk.CTkToplevel):
             success, message = self.controller.occurrence_service.add_comment(occurrence_id, user_email, user_name, comment_text)
         
         if success:
-            from .notification_popup import NotificationPopup
+            from views.components.notification_popup import NotificationPopup
             NotificationPopup(self.master, message=message, type="success")
             self.new_comment_textbox.delete("1.0", "end")
             self._load_comments(occurrence_id)
@@ -283,7 +283,7 @@ class OccurrenceDetailView(ctk.CTkToplevel):
             # CORREÇÃO: Chama o método do serviço de ocorrências
             success, message = self.controller.occurrence_service.delete_comment(comment_id)
             if success:
-                from .notification_popup import NotificationPopup
+                from views.components.notification_popup import NotificationPopup
                 NotificationPopup(self.master, message=message, type="success")
                 self._load_comments(self.occurrence_data.get('ID', 'N/A'))
             else:

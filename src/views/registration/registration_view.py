@@ -6,7 +6,7 @@
 import customtkinter as ctk
 from tkinter import messagebox
 from functools import partial
-from .autocomplete_widget import AutocompleteEntry
+from views.components.autocomplete_widget import AutocompleteEntry
 import re
 
 class RegistrationView(ctk.CTkFrame):
