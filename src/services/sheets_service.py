@@ -2,9 +2,11 @@
 # FICHEIRO: src/services/sheets_service.py
 # DESCRIÇÃO: Lida com todas as operações de leitura e escrita na planilha
 #            Google Sheets.
-# DATA DA ATUALIZAÇÃO: 27/08/2025
+# DATA DA ATUALIZAÇÃO: 28/08/2025
 # NOTAS: Corrigidos alertas do Pylance para tipagem de `value_input_option`
 #        e resolução de `gspread.exceptions.CellNotFound`.
+#        Melhorado o tratamento de erros para acesso à planislha e para
+#        o carregamento das sugestões de operadoras.
 # ==============================================================================
 
 import gspread
@@ -16,7 +18,7 @@ import os
 from tkinter import messagebox
 import threading
 from builtins import Exception, print, len, str, sorted, list, set, enumerate, dict, bool, isinstance, range
-from gspread.utils import ValueInputOption # NOVA IMPORTAÇÃO PARA TIPAGEM
+from gspread.utils import ValueInputOption
 
 class SheetsService:
     """
@@ -39,16 +41,37 @@ class SheetsService:
         self.is_connected = False
 
     def _connect(self):
-        """Conecta-se ao Google Sheets usando as credenciais da conta de serviço."""
-        if self.is_connected:
-            return
+        """
+        Conecta-se ao Google Sheets usando as credenciais da conta de serviço.
+        Tenta revalidar a conexão existente ou estabelece uma nova.
+        """
+        # Se já estiver conectado, tenta validar a conexão existente com uma operação leve
+        if self.is_connected and self._SPREADSHEET:
+            try:
+                # Tenta acessar uma aba para verificar se a conexão está ativa
+                self._SPREADSHEET.worksheet(self.USERS_SHEET)
+                return # Conexão ainda válida
+            except Exception:
+                # Se a validação falhar, assume que a conexão foi perdida
+                self.is_connected = False
+                self._GC = None
+                self._SPREADSHEET = None
 
+        # Se não estiver conectado ou a conexão foi perdida, tenta conectar novamente
         with self.gspread_lock:
-            if self.is_connected:
-                return
+            # Verifica novamente após adquirir o lock para evitar race conditions
+            if self.is_connected and self._SPREADSHEET:
+                try:
+                    self._SPREADSHEET.worksheet(self.USERS_SHEET)
+                    return
+                except Exception:
+                    self.is_connected = False
+                    self._GC = None
+                    self._SPREADSHEET = None
 
             self._SERVICE_CREDENTIALS = self.auth_service.get_service_account_credentials()
             if not self._SERVICE_CREDENTIALS:
+                self.is_connected = False # Garante que o estado é falso se as credenciais falharem
                 return
 
             try:
@@ -57,19 +80,26 @@ class SheetsService:
                 self.is_connected = True
             except Exception as e:
                  messagebox.showerror("Erro de Conexão", f"Não foi possível conectar ao Google Sheets: {e}")
+                 self.is_connected = False # Define explicitamente como False em caso de falha
+                 self._GC = None
+                 self._SPREADSHEET = None
 
     def _get_worksheet(self, sheet_name):
         """Obtém uma aba (worksheet) específica da planilha."""
         self._connect()
-        if not self._SPREADSHEET: return None
+        if not self._SPREADSHEET: 
+            print(f"ERRO: Não conectado à planilha principal. Falha ao obter a aba '{sheet_name}'.")
+            return None
 
         try:
             return self._SPREADSHEET.worksheet(sheet_name)
         except gspread.exceptions.WorksheetNotFound:
             print(f"ERRO: A aba '{sheet_name}' não foi encontrada na planilha.")
+            messagebox.showerror("Erro de Planilha", f"A aba '{sheet_name}' não foi encontrada na planilha do Google Sheets. Verifique o nome da aba.")
             return None
         except Exception as e:
             print(f"ERRO ao obter a aba '{sheet_name}': {e}")
+            messagebox.showerror("Erro de Acesso", f"Ocorreu um erro ao tentar aceder à aba '{sheet_name}': {e}")
             return None
 
     def _get_all_records_safe(self, worksheet):
@@ -209,7 +239,7 @@ class SheetsService:
         """Verifica o status e o perfil de um utilizador."""
         self._connect()
         ws = self._get_worksheet(self.USERS_SHEET)
-        if not ws: return dict(status="error")
+        if not ws: return dict(status="error") # Retorna um erro se a planilha não for acessível
         try:
             records = self._get_all_records_safe(ws)
             for user_rec in records:
@@ -334,13 +364,17 @@ class SheetsService:
         """Atualiza o status de um utilizador específico."""
         self._connect()
         ws = self._get_worksheet(self.USERS_SHEET)
-        if not ws: return
+        if not ws: return bool(False), "Falha ao aceder à planilha de usuários." # Retorna False e mensagem de erro
         try:
             cell = ws.find(email, in_column=1)
             if cell: ws.update_cell(cell.row, 6, new_status)
+            return bool(True), "Status do usuário atualizado com sucesso."
         except gspread.exceptions.CellNotFound: # type: ignore
             print(f"Usuário {email} não encontrado.")
-        except Exception as e: print(f"Erro ao atualizar status do usuário {email}: {e}")
+            return bool(False), f"Usuário {email} não encontrado na planilha."
+        except Exception as e:
+            print(f"Erro ao atualizar status do usuário {email}: {e}")
+            return bool(False), f"Erro ao atualizar status do usuário {email}: {e}"
 
     def get_occurrence_by_id(self, occurrence_id):
         """Obtém os detalhes de uma ocorrência pelo seu ID."""
@@ -527,13 +561,18 @@ class SheetsService:
         self._connect()
         ws = self._get_worksheet(self.OPERATORS_SHEET)
         if not ws:
-            print("AVISO: Planilha de operadores não encontrada. Retornando lista vazia.")
+            # _get_worksheet já exibe uma mensagem de erro, então apenas retorna lista vazia
             return []
         try:
-            # Assume AAdmin123@@que a lista de operadores está na primeira coluna
+            # Assume que a lista de operadores está na primeira coluna
             # e pula o cabeçalho se houver
             operators = [row[0] for row in ws.get_all_values() if row and row[0].strip()][1:]
+            if not operators:
+                print(f"AVISO: A planilha '{self.OPERATORS_SHEET}' está vazia ou não contém operadoras na primeira coluna.")
+                messagebox.showwarning("Dados Incompletos", f"A planilha '{self.OPERATORS_SHEET}' está vazia ou não contém dados de operadoras. As sugestões não serão exibidas.")
+                return []
             return sorted(list(set(operators))) # Remove duplicatas e ordena
         except Exception as e:
-            print(f"Erro ao obter lista de operadores: {e}")
+            print(f"Erro ao obter lista de operadoras da planilha '{self.OPERATORS_SHEET}': {e}")
+            messagebox.showerror("Erro de Leitura", f"Ocorreu um erro ao ler a lista de operadoras da planilha '{self.OPERATORS_SHEET}': {e}")
             return []
