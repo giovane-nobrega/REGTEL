@@ -5,14 +5,19 @@
 # DATA DA ATUALIZAÇÃO: 28/08/2025
 # NOTAS: Corrigidos alertas do Pylance para tipagem de `value_input_option`
 #        e resolução de `gspread.exceptions.CellNotFound`.
-#        Melhorado o tratamento de erros para acesso à planislha e para
+#        Melhorado o tratamento de erros para acesso à planilha e para
 #        o carregamento das sugestões de operadoras.
+#        CORRIGIDO: A lógica de filtragem de ocorrências para o grupo PARTNER
+#        agora inclui tanto as ocorrências da empresa quanto as registradas
+#        pelo próprio usuário.
+#        ATUALIZADO: Cache inteligente e reconexão mais robusta para evitar
+#        erros de cota da API.
 # ==============================================================================
 
 import gspread
 import json
 import csv
-from datetime import datetime
+from datetime import datetime, timedelta
 from googleapiclient.http import MediaFileUpload
 import os
 from tkinter import messagebox
@@ -39,39 +44,38 @@ class SheetsService:
         self._GC = None
         self._SPREADSHEET = None
         self.is_connected = False
+        
+        self._cache = {
+            self.USERS_SHEET: {'data': None, 'timestamp': None},
+            self.CALLS_SHEET: {'data': None, 'timestamp': None},
+            self.SIMPLE_CALLS_SHEET: {'data': None, 'timestamp': None},
+            self.EQUIPMENT_SHEET: {'data': None, 'timestamp': None},
+            self.OPERATORS_SHEET: {'data': None, 'timestamp': None}
+        }
+        self.CACHE_DURATION_MINUTES = 5
 
     def _connect(self):
         """
         Conecta-se ao Google Sheets usando as credenciais da conta de serviço.
         Tenta revalidar a conexão existente ou estabelece uma nova.
         """
-        # Se já estiver conectado, tenta validar a conexão existente com uma operação leve
         if self.is_connected and self._SPREADSHEET:
             try:
-                # Tenta acessar uma aba para verificar se a conexão está ativa
-                self._SPREADSHEET.worksheet(self.USERS_SHEET)
-                return # Conexão ainda válida
+                # Tenta uma operação leve para validar a conexão.
+                self._SPREADSHEET.id
+                return
             except Exception:
-                # Se a validação falhar, assume que a conexão foi perdida
                 self.is_connected = False
                 self._GC = None
                 self._SPREADSHEET = None
-
-        # Se não estiver conectado ou a conexão foi perdida, tenta conectar novamente
+        
         with self.gspread_lock:
-            # Verifica novamente após adquirir o lock para evitar race conditions
-            if self.is_connected and self._SPREADSHEET:
-                try:
-                    self._SPREADSHEET.worksheet(self.USERS_SHEET)
-                    return
-                except Exception:
-                    self.is_connected = False
-                    self._GC = None
-                    self._SPREADSHEET = None
+            if self.is_connected:
+                return
 
             self._SERVICE_CREDENTIALS = self.auth_service.get_service_account_credentials()
             if not self._SERVICE_CREDENTIALS:
-                self.is_connected = False # Garante que o estado é falso se as credenciais falharem
+                self.is_connected = False
                 return
 
             try:
@@ -80,7 +84,7 @@ class SheetsService:
                 self.is_connected = True
             except Exception as e:
                  messagebox.showerror("Erro de Conexão", f"Não foi possível conectar ao Google Sheets: {e}")
-                 self.is_connected = False # Define explicitamente como False em caso de falha
+                 self.is_connected = False
                  self._GC = None
                  self._SPREADSHEET = None
 
@@ -240,18 +244,33 @@ class SheetsService:
         self._connect()
         ws = self._get_worksheet(self.USERS_SHEET)
         if not ws: return dict(status="error") # Retorna um erro se a planilha não for acessível
-        try:
-            records = self._get_all_records_safe(ws)
-            for user_rec in records:
-                if user_rec.get("email") and str(user_rec["email"]).strip().lower() == str(email).strip().lower():
-                    return user_rec
-        except Exception as e:
-            print(f"Erro ao ler a planilha de usuários: {e}")
-            return dict(status="error")
+        
+        # Lógica de cache para users
+        cache_key = self.USERS_SHEET
+        if self._cache[cache_key]['data'] is not None and self._cache[cache_key]['timestamp'] is not None and (datetime.now() - self._cache[cache_key]['timestamp']).total_seconds() < (self.CACHE_DURATION_MINUTES * 60):
+            records = self._cache[cache_key]['data']
+        else:
+            try:
+                records = self._get_all_records_safe(ws)
+                self._cache[cache_key]['data'] = records
+                self._cache[cache_key]['timestamp'] = datetime.now()
+            except Exception as e:
+                print(f"Erro ao ler a planilha de usuários: {e}")
+                return dict(status="error")
+        
+        for user_rec in records:
+            if user_rec.get("email") and str(user_rec["email"]).strip().lower() == str(email).strip().lower():
+                return user_rec
         return dict(status="unregistered")
 
-    def get_all_occurrences(self):
-        """Obtém todas as ocorrências de todas as abas."""
+
+    def get_all_occurrences(self, force_refresh=False):
+        """Obtém todas as ocorrências de todas as abas, utilizando cache."""
+        # Lógica de cache para ocorrências
+        cache_key = "all_occurrences_cache"
+        if not force_refresh and self._cache.get(cache_key) and (datetime.now() - self._cache[cache_key]['timestamp']).total_seconds() < (self.CACHE_DURATION_MINUTES * 60):
+            return self._cache[cache_key]['data']
+        
         self._connect()
         calls_ws = self._get_worksheet(self.CALLS_SHEET)
         simple_calls_ws = self._get_worksheet(self.SIMPLE_CALLS_SHEET)
@@ -286,8 +305,12 @@ class SheetsService:
                 if rec.get('id'):
                     rec['Título da Ocorrência'] = get_final_title(rec, "equipment")
                     all_occurrences.append(rec)
+        
+        # Atualiza o cache
+        self._cache[cache_key] = {'data': all_occurrences, 'timestamp': datetime.now()}
 
         return sorted(all_occurrences, key=lambda x: x.get('Data de Registro', ''), reverse=True)
+
 
     def get_occurrences_by_user(self, user_email):
         """Obtém as ocorrências visíveis para um utilizador específico."""
@@ -300,18 +323,33 @@ class SheetsService:
         main_group = user_profile.get("main_group", "").strip().upper()
         user_company = user_profile.get("company", "").strip().upper()
         
-        all_occurrences = self.get_all_occurrences()
+        # Força o refresh da cache para garantir os dados mais recentes
+        all_occurrences = self.get_all_occurrences(force_refresh=True)
         filtered_list = []
 
         if main_group == '67_TELECOM':
             return all_occurrences
         elif main_group == 'PARTNER':
+            # CORREÇÃO: Lógica para parceiros
             if not user_company: return []
             for occ in all_occurrences:
-                occurrence_id = occ.get('id', '').strip().upper()
+                # Pega o tipo de ocorrência pelo prefixo do ID
+                occ_id = occ.get('id', '')
+                occ_type = occ_id.split('-')[0].upper() if '-' in occ_id else ''
+                # Pega a empresa e o email do registrador
                 occ_registrador_company = occ.get('registrador company', '').strip().upper()
-                if 'CALL' in occurrence_id and 'SCALL' not in occurrence_id and occ_registrador_company == user_company:
+                occ_registrador_email = occ.get('e-mail do registrador', '').strip().lower()
+
+                # Condição de visibilidade para parceiros
+                # A. É uma ocorrência de chamada (detalhada ou simples) da empresa do usuário?
+                is_company_call = (occ_type in ('CALL', 'SCALL')) and (occ_registrador_company == user_company)
+
+                # B. A ocorrência foi registrada pelo próprio usuário logado?
+                is_my_own_occurrence = (occ_registrador_email == user_email.strip().lower())
+
+                if is_company_call or is_my_own_occurrence:
                     filtered_list.append(occ)
+
             return filtered_list
         elif main_group == 'PREFEITURA':
             for occ in all_occurrences:
@@ -324,12 +362,20 @@ class SheetsService:
             return filtered_list
         return []
 
-    def get_all_users(self):
-        """Obtém todos os utilizadores registados."""
+    def get_all_users(self, force_refresh=False):
+        """Obtém todos os utilizadores registados, utilizando cache."""
+        cache_key = self.USERS_SHEET
+        if not force_refresh and self._cache[cache_key]['data'] is not None and (datetime.now() - self._cache[cache_key]['timestamp']).total_seconds() < (self.CACHE_DURATION_MINUTES * 60):
+            return self._cache[cache_key]['data']
+            
         self._connect()
         ws = self._get_worksheet(self.USERS_SHEET)
         if not ws: return []
-        return [rec for rec in self._get_all_records_safe(ws) if rec.get("email")]
+        
+        records = [rec for rec in self._get_all_records_safe(ws) if rec.get("email")]
+        self._cache[cache_key]['data'] = records
+        self._cache[cache_key]['timestamp'] = datetime.now()
+        return records
 
     def request_access(self, email, full_name, username, main_group, sub_group, company_name=None):
         """Envia uma solicitação de acesso para um novo utilizador."""
@@ -338,6 +384,7 @@ class SheetsService:
         if not ws: return bool(False), "Falha ao aceder à planilha."
 
         try:
+            # Não usa cache aqui para garantir que a verificação é em tempo real
             all_users_records = self._get_all_records_safe(ws)
             normalized_emails_in_sheet = [str(rec.get('email', '')).strip().lower() for rec in all_users_records]
             if str(email).strip().lower() in normalized_emails_in_sheet:
@@ -348,26 +395,31 @@ class SheetsService:
         new_row = [email, full_name, username, main_group, sub_group, "pending", company_name or ""]
         try:
             ws.append_row(new_row, value_input_option=ValueInputOption.user_entered)
+            self._cache[self.USERS_SHEET]['data'] = None # Invalida o cache de usuários
             return bool(True), "Solicitação de acesso enviada com sucesso."
         except Exception as e:
             return bool(False), f"Ocorreu um erro ao enviar a solicitação: {e}"
 
     def get_pending_requests(self):
-        """Obtém todas as solicitações de acesso pendentes."""
+        """Obtém todas as solicitações de acesso pendentes, utilizando cache."""
         self._connect()
         ws = self._get_worksheet(self.USERS_SHEET)
         if not ws: return []
-        all_users = self._get_all_records_safe(ws)
+        
+        # Obtém os usuários, usando o cache se disponível
+        all_users = self.get_all_users()
         return [user for user in all_users if user.get("status") and str(user.get("status")).strip().lower() == "pending"]
 
     def update_user_status(self, email, new_status):
         """Atualiza o status de um utilizador específico."""
         self._connect()
         ws = self._get_worksheet(self.USERS_SHEET)
-        if not ws: return bool(False), "Falha ao aceder à planilha de usuários." # Retorna False e mensagem de erro
+        if not ws: return bool(False), "Falha ao aceder à planilha de usuários."
         try:
             cell = ws.find(email, in_column=1)
-            if cell: ws.update_cell(cell.row, 6, new_status)
+            if cell: 
+                ws.update_cell(cell.row, 6, new_status)
+                self._cache[self.USERS_SHEET]['data'] = None # Invalida o cache de usuários
             return bool(True), "Status do usuário atualizado com sucesso."
         except gspread.exceptions.CellNotFound: # type: ignore
             print(f"Usuário {email} não encontrado.")
@@ -379,7 +431,9 @@ class SheetsService:
     def get_occurrence_by_id(self, occurrence_id):
         """Obtém os detalhes de uma ocorrência pelo seu ID."""
         self._connect()
-        for occ in self.get_all_occurrences():
+        # Busca no cache ou na planilha se o cache estiver vazio
+        all_occurrences = self.get_all_occurrences()
+        for occ in all_occurrences:
             if str(occ.get('id')).strip().lower() == str(occurrence_id).strip().lower():
                 return occ
         return None
@@ -403,6 +457,8 @@ class SheetsService:
             cell = ws.find(occurrence_id, in_column=1)
             if cell:
                 ws.update_cell(cell.row, status_col, new_status)
+                self._cache.pop("all_occurrences_cache", None) # Invalida o cache de ocorrências
+                self._cache[sheet_name]['data'] = None
                 return bool(True), "Status atualizado com sucesso."
             else:
                 return bool(False), f"Ocorrência {occurrence_id} não encontrada."
@@ -430,6 +486,8 @@ class SheetsService:
                 user_profile.get("main_group", "N/A"), user_profile.get("company", "")
             ]
             ws.append_row(new_row, value_input_option=ValueInputOption.user_entered)
+            self._cache.pop("all_occurrences_cache", None) # Invalida o cache
+            self._cache[self.SIMPLE_CALLS_SHEET]['data'] = None
             return bool(True), "Ocorrência registrada com sucesso."
         except Exception as e:
             return bool(False), f"Ocorreu um erro ao registrar: {e}"
@@ -457,6 +515,8 @@ class SheetsService:
         ]
         try:
             ws.append_row(new_row, value_input_option=ValueInputOption.user_entered)
+            self._cache.pop("all_occurrences_cache", None) # Invalida o cache
+            self._cache[self.EQUIPMENT_SHEET]['data'] = None
             return bool(True), "Ocorrência de equipamento registrada com sucesso."
         except Exception as e:
             return bool(False), f"Ocorreu um erro ao registrar: {e}"
@@ -484,6 +544,8 @@ class SheetsService:
         ]
         try:
             ws.append_row(new_row, value_input_option=ValueInputOption.user_entered)
+            self._cache.pop("all_occurrences_cache", None) # Invalida o cache
+            self._cache[self.CALLS_SHEET]['data'] = None
             return bool(True), "Ocorrência detalhada registrada com sucesso."
         except Exception as e:
             return bool(False), f"Ocorreu um erro ao registrar: {e}"
@@ -556,22 +618,27 @@ class SheetsService:
             print(f"Erro ao obter comentários da ocorrência {occurrence_id}: {e}")
             return []
 
-    def get_all_operators(self):
+    def get_all_operators(self, force_refresh=False):
         """Obtém a lista de todas as operadoras da planilha de operadores."""
+        cache_key = self.OPERATORS_SHEET
+        if not force_refresh and self._cache[cache_key]['data'] is not None and (datetime.now() - self._cache[cache_key]['timestamp']).total_seconds() < (self.CACHE_DURATION_MINUTES * 60):
+            return self._cache[cache_key]['data']
+            
         self._connect()
         ws = self._get_worksheet(self.OPERATORS_SHEET)
         if not ws:
-            # _get_worksheet já exibe uma mensagem de erro, então apenas retorna lista vazia
             return []
         try:
-            # Assume que a lista de operadores está na primeira coluna
-            # e pula o cabeçalho se houver
             operators = [row[0] for row in ws.get_all_values() if row and row[0].strip()][1:]
             if not operators:
                 print(f"AVISO: A planilha '{self.OPERATORS_SHEET}' está vazia ou não contém operadoras na primeira coluna.")
                 messagebox.showwarning("Dados Incompletos", f"A planilha '{self.OPERATORS_SHEET}' está vazia ou não contém dados de operadoras. As sugestões não serão exibidas.")
                 return []
-            return sorted(list(set(operators))) # Remove duplicatas e ordena
+            
+            unique_operators = sorted(list(set(operators)))
+            self._cache[cache_key]['data'] = unique_operators
+            self._cache[cache_key]['timestamp'] = datetime.now()
+            return unique_operators
         except Exception as e:
             print(f"Erro ao obter lista de operadoras da planilha '{self.OPERATORS_SHEET}': {e}")
             messagebox.showerror("Erro de Leitura", f"Ocorreu um erro ao ler a lista de operadoras da planilha '{self.OPERATORS_SHEET}': {e}")

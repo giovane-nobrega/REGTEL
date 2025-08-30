@@ -13,6 +13,7 @@ service_account.json
 token.json
 .regtel/
 session.auth
+session.json
 
 # Logs e arquivos temporários
 *.log
