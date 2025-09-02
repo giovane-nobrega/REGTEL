@@ -1,10 +1,9 @@
 # ==============================================================================
 # FICHEIRO: src/services/auth_service.py
 # DESCRIÇÃO: Lida com a autenticação de utilizadores (OAuth) e da conta de serviço.
-# DATA DA ATUALIZAÇÃO: 27/08/2025
-# NOTAS: Nenhuma alteração de código foi necessária neste ficheiro para a
-#        nova estrutura. Os imports relativos e a lógica de busca de
-#        ficheiros na raiz do projeto continuam a funcionar corretamente.
+# DATA DA ATUALIZAÇÃO: 28/08/2025
+# NOTAS: O caminho para os ficheiros de credenciais foi ajustado para
+#        a nova pasta 'credentials'.
 # ==============================================================================
 
 import os
@@ -41,8 +40,8 @@ class AuthService:
         try:
             base_path = sys._MEIPASS # type: ignore
         except Exception:
-            # De 'src/services/auth_service.py', sobe dois níveis para a raiz
-            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+            # Sobe dois níveis (para a raiz do projeto) e depois desce para a pasta 'credentials'
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'credentials'))
         return os.path.join(base_path, relative_path)
 
     def load_user_credentials(self):
