@@ -3,15 +3,9 @@
 # DESCRIÇÃO: Lida com todas as operações de leitura e escrita na planilha
 #            Google Sheets.
 # DATA DA ATUALIZAÇÃO: 28/08/2025
-# NOTAS: Corrigidos alertas do Pylance para tipagem de `value_input_option`
-#        e resolução de `gspread.exceptions.CellNotFound`.
-#        Melhorado o tratamento de erros para acesso à planilha e para
-#        o carregamento das sugestões de operadoras.
-#        CORRIGIDO: A lógica de filtragem de ocorrências para o grupo PARTNER
-#        agora inclui tanto as ocorrências da empresa quanto as registradas
-#        pelo próprio usuário.
-#        ATUALIZADO: Cache inteligente e reconexão mais robusta para evitar
-#        erros de cota da API.
+# NOTAS: Corrigidos os alertas do Pylance relacionados a valores 'None' no cache
+#        e na lógica de data. Adicionadas verificações explícitas de 'None'
+#        para garantir que as operações de cache e de data sejam seguras.
 # ==============================================================================
 
 import gspread
@@ -24,6 +18,7 @@ from tkinter import messagebox
 import threading
 from builtins import Exception, print, len, str, sorted, list, set, enumerate, dict, bool, isinstance, range
 from gspread.utils import ValueInputOption
+from typing import Optional, Dict, Any, List, Union, Tuple
 
 class SheetsService:
     """
@@ -41,29 +36,26 @@ class SheetsService:
         self.OPERATORS_SHEET = "operators"
 
         self.gspread_lock = threading.Lock()
-        self._GC = None
-        self._SPREADSHEET = None
+        self._GC: Optional[gspread.Client] = None
+        self._SPREADSHEET: Optional[gspread.Spreadsheet] = None
         self.is_connected = False
         
-        self._cache = {
+        self._cache: Dict[str, Dict[str, Any]] = {
             self.USERS_SHEET: {'data': None, 'timestamp': None},
             self.CALLS_SHEET: {'data': None, 'timestamp': None},
             self.SIMPLE_CALLS_SHEET: {'data': None, 'timestamp': None},
             self.EQUIPMENT_SHEET: {'data': None, 'timestamp': None},
-            self.OPERATORS_SHEET: {'data': None, 'timestamp': None}
+            self.OPERATORS_SHEET: {'data': None, 'timestamp': None},
+            "all_occurrences_cache": {'data': None, 'timestamp': None}
         }
         self.CACHE_DURATION_MINUTES = 5
 
     def _connect(self):
-        """
-        Conecta-se ao Google Sheets usando as credenciais da conta de serviço.
-        Tenta revalidar a conexão existente ou estabelece uma nova.
-        """
+        """Conecta-se ao Google Sheets."""
         if self.is_connected and self._SPREADSHEET:
             try:
-                # Tenta uma operação leve para validar a conexão.
-                self._SPREADSHEET.id
-                return
+                if self._SPREADSHEET.id:
+                    return
             except Exception:
                 self.is_connected = False
                 self._GC = None
@@ -88,8 +80,8 @@ class SheetsService:
                  self._GC = None
                  self._SPREADSHEET = None
 
-    def _get_worksheet(self, sheet_name):
-        """Obtém uma aba (worksheet) específica da planilha."""
+    def _get_worksheet(self, sheet_name: str) -> Optional[gspread.Worksheet]:
+        """Obtém uma aba específica da planilha."""
         self._connect()
         if not self._SPREADSHEET: 
             print(f"ERRO: Não conectado à planilha principal. Falha ao obter a aba '{sheet_name}'.")
@@ -97,7 +89,7 @@ class SheetsService:
 
         try:
             return self._SPREADSHEET.worksheet(sheet_name)
-        except gspread.exceptions.WorksheetNotFound:
+        except gspread.WorksheetNotFound:
             print(f"ERRO: A aba '{sheet_name}' não foi encontrada na planilha.")
             messagebox.showerror("Erro de Planilha", f"A aba '{sheet_name}' não foi encontrada na planilha do Google Sheets. Verifique o nome da aba.")
             return None
@@ -106,8 +98,8 @@ class SheetsService:
             messagebox.showerror("Erro de Acesso", f"Ocorreu um erro ao tentar aceder à aba '{sheet_name}': {e}")
             return None
 
-    def _get_all_records_safe(self, worksheet):
-        """Lê todos os registos de uma aba de forma segura (thread-safe)."""
+    def _get_all_records_safe(self, worksheet: gspread.Worksheet) -> List[Dict[str, str]]:
+        """Lê todos os registos de uma aba de forma segura."""
         with self.gspread_lock:
             all_values = worksheet.get_all_values()
             if not all_values:
@@ -117,7 +109,7 @@ class SheetsService:
             data_rows = all_values[1:]
 
             processed_headers = []
-            seen_headers = {}
+            seen_headers: Dict[str, int] = {}
             for header in raw_headers:
                 original_header = header.strip() if header else ''
                 normalized_header = original_header.lower().replace(' ', '')
@@ -142,12 +134,40 @@ class SheetsService:
                 processed_records.append(processed_rec)
             return processed_records
 
-    def _upload_files_to_drive(self, user_credentials, file_paths):
-        """Faz o upload de ficheiros para o Google Drive do utilizador."""
-        if not file_paths: return bool(True), list()
+def _share_file_with_users(self, drive_service: Any, file_id: str, uploader_email: str):
+    """Compartilha o arquivo com o uploader e administradores."""
+    emails_to_share_with = {uploader_email}
+    
+    try:
+        all_users = self.get_all_users()
+        if all_users:
+            admins = [
+                user.get('email') for user in all_users 
+                if user.get('sub_group') in ['ADMIN', 'SUPER_ADMIN'] and user.get('email')
+            ]
+            emails_to_share_with.update(admins)
+    except Exception as e:
+        print(f"AVISO: Não foi possível obter lista de administradores: {e}")
+
+    for email in emails_to_share_with:
+        try:
+            permission = {
+                'type': 'user',
+                'role': 'reader',
+                'emailAddress': email
+            }
+            drive_service.permissions().create(fileId=file_id, body=permission, fields='id').execute()
+        except Exception as e:
+            print(f"AVISO: Não foi possível compartilhar o arquivo {file_id} com {email}. Erro: {e}")
+
+    def _upload_files_to_drive(self, user_credentials: Any, file_paths: List[str], uploader_email: str) -> Tuple[bool, Union[str, List[str]]]:
+        """Faz upload de ficheiros para o Google Drive."""
+        if not file_paths:
+            return True, []
         
         drive_service = self.auth_service.get_drive_service(user_credentials)
-        if not drive_service: return bool(False), "Não foi possível obter o serviço do Google Drive."
+        if not drive_service:
+            return False, "Não foi possível obter o serviço do Google Drive."
 
         try:
             q = "mimeType='application/vnd.google-apps.folder' and name='Craft Quest Anexos' and trashed=false"
@@ -166,33 +186,36 @@ class SheetsService:
                 media = MediaFileUpload(file_path, resumable=True)
                 file = drive_service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
                 
-                drive_service.permissions().create(fileId=file.get('id'), body={'role': 'reader', 'type': 'anyone'}).execute()
+                self._share_file_with_users(drive_service, file.get('id'), uploader_email)
+
                 uploaded_file_links.append(file.get('webViewLink'))
 
-            return bool(True), uploaded_file_links
+            return True, uploaded_file_links
         except Exception as e:
-            return bool(False), f"Ocorreu um erro durante o upload para o Google Drive: {e}"
+            return False, f"Ocorreu um erro durante o upload para o Google Drive: {e}"
 
-    # --- MÉTODOS DE ATUALIZAÇÃO EM LOTE ---
-    def batch_update_occurrence_statuses(self, changes: dict):
+
+
+    def batch_update_occurrence_statuses(self, changes: Dict[str, str]) -> Tuple[bool, str]:
         """Atualiza múltiplos status de ocorrências de uma só vez."""
         self._connect()
-        if not self._SPREADSHEET: return bool(False), "Falha na conexão."
+        if not self._SPREADSHEET: return False, "Falha na conexão."
 
-        updates_by_sheet = {
+        updates_by_sheet: Dict[str, List[gspread.Cell]] = {
             self.CALLS_SHEET: [],
             self.SIMPLE_CALLS_SHEET: [],
             self.EQUIPMENT_SHEET: []
         }
 
-        all_ids_map = {}
+        all_ids_map: Dict[str, Dict[str, Any]] = {}
         for sheet_name in updates_by_sheet.keys():
             ws = self._get_worksheet(sheet_name)
             if ws:
                 ids_in_sheet = ws.col_values(1)
                 for i, occ_id in enumerate(ids_in_sheet):
-                    if i == 0: continue # Pula o cabeçalho
-                    all_ids_map[occ_id] = {'sheet': sheet_name, 'row': i + 1}
+                    if i == 0: continue
+            if occ_id:  # Verificar se occ_id não é None ou vazio
+                all_ids_map[str(occ_id)] = {'sheet': sheet_name, 'row': i + 1}
 
         for occ_id, new_status in changes.items():
             if occ_id in all_ids_map:
@@ -207,15 +230,15 @@ class SheetsService:
                     if cells_to_update:
                         ws = self._get_worksheet(sheet_name)
                         if ws: ws.update_cells(cells_to_update)
-            return bool(True), "Alterações salvas com sucesso."
+            return True, "Alterações salvas com sucesso."
         except Exception as e:
-            return bool(False), f"Erro na atualização em lote: {e}"
+            return False, f"Erro na atualização em lote: {e}"
 
-    def batch_update_user_profiles(self, changes: dict):
+    def batch_update_user_profiles(self, changes: Dict[str, Dict[str, str]]) -> Tuple[bool, str]:
         """Atualiza múltiplos perfis de utilizador de uma só vez."""
         self._connect()
         ws = self._get_worksheet(self.USERS_SHEET)
-        if not ws: return bool(False), "Falha na conexão com a aba de utilizadores."
+        if not ws: return False, "Falha na conexão com a aba de utilizadores."
 
         emails_in_sheet = ws.col_values(1)
         all_users_map = {str(email).strip().lower(): {'row': i + 1}
@@ -234,21 +257,28 @@ class SheetsService:
             with self.gspread_lock:
                 if cells_to_update:
                     ws.update_cells(cells_to_update)
-            return bool(True), "Perfis atualizados com sucesso."
+            return True, "Perfis atualizados com sucesso."
         except Exception as e:
-            return bool(False), f"Erro na atualização de perfis em lote: {e}"
+            return False, f"Erro na atualização de perfis em lote: {e}"
 
-    # --- MÉTODOS DE LEITURA E ESCRITA ---
-    def check_user_status(self, email):
+    def check_user_status(self, email: str) -> Dict[str, str]:
         """Verifica o status e o perfil de um utilizador."""
         self._connect()
         ws = self._get_worksheet(self.USERS_SHEET)
-        if not ws: return dict(status="error") # Retorna um erro se a planilha não for acessível
+        if not ws:
+            return {"status": "error"}
         
-        # Lógica de cache para users
         cache_key = self.USERS_SHEET
-        if self._cache[cache_key]['data'] is not None and self._cache[cache_key]['timestamp'] is not None and (datetime.now() - self._cache[cache_key]['timestamp']).total_seconds() < (self.CACHE_DURATION_MINUTES * 60):
-            records = self._cache[cache_key]['data']
+        cache_data = self._cache[cache_key]['data']
+        cache_timestamp = self._cache[cache_key]['timestamp']
+        
+        is_cache_valid = (
+            cache_data is not None and
+            cache_timestamp is not None and
+            (datetime.now() - cache_timestamp).total_seconds() < (self.CACHE_DURATION_MINUTES * 60)
+        )
+        if is_cache_valid:
+            records = cache_data
         else:
             try:
                 records = self._get_all_records_safe(ws)
@@ -256,352 +286,186 @@ class SheetsService:
                 self._cache[cache_key]['timestamp'] = datetime.now()
             except Exception as e:
                 print(f"Erro ao ler a planilha de usuários: {e}")
-                return dict(status="error")
+                return {"status": "error"}
         
+        if records is None:
+            return {"status": "error"}
+            
         for user_rec in records:
-            if user_rec.get("email") and str(user_rec["email"]).strip().lower() == str(email).strip().lower():
+            if user_rec.get("email") and str(user_rec["email"]).strip().lower() == email.strip().lower():
                 return user_rec
-        return dict(status="unregistered")
+        return {"status": "unregistered"}
 
-
-    def get_all_occurrences(self, force_refresh=False):
-        """Obtém todas as ocorrências de todas as abas, utilizando cache."""
-        # Lógica de cache para ocorrências
-        cache_key = "all_occurrences_cache"
-        if not force_refresh and self._cache.get(cache_key) and (datetime.now() - self._cache[cache_key]['timestamp']).total_seconds() < (self.CACHE_DURATION_MINUTES * 60):
-            return self._cache[cache_key]['data']
+def get_all_users(self, force_refresh: bool = False) -> List[Dict[str, str]]:
+    """Obtém todos os utilizadores registados, utilizando cache."""
+    cache_key = self.USERS_SHEET
+    cache_data = self._cache[cache_key]['data']
+    cache_timestamp = self._cache[cache_key]['timestamp']
+    
+    is_cache_valid = (
+        cache_data is not None and
+        cache_timestamp is not None and
+        (datetime.now() - cache_timestamp).total_seconds() < (self.CACHE_DURATION_MINUTES * 60)
+    )
+    if not force_refresh and is_cache_valid:
+        return cache_data or []
         
-        self._connect()
-        calls_ws = self._get_worksheet(self.CALLS_SHEET)
-        simple_calls_ws = self._get_worksheet(self.SIMPLE_CALLS_SHEET)
-        equip_ws = self._get_worksheet(self.EQUIPMENT_SHEET)
-
-        all_occurrences = []
-        possible_title_keys = ['título da ocorrência', 'título', 'title']
-
-        def get_final_title(record, record_type):
-            for key in possible_title_keys:
-                value = record.get(key)
-                if value is not None and str(value).strip() != "":
-                    return str(value).strip()
-            record_id = record.get('id', 'N/A')
-            if record_type == "call": return f"Chamada Detalhada {record_id}"
-            elif record_type == "simple_call": return f"Chamada Simples de {record.get('origem', 'N/A')} para {record.get('destino', 'N/A')}"
-            elif record_type == "equipment": return record.get('tipo de equipamento', f"Equipamento {record_id}")
-            return f"Ocorrência {record_id}"
-
-        if calls_ws:
-            for rec in self._get_all_records_safe(calls_ws):
-                if rec.get('id'):
-                    rec['Título da Ocorrência'] = get_final_title(rec, "call")
-                    all_occurrences.append(rec)
-        if simple_calls_ws:
-            for rec in self._get_all_records_safe(simple_calls_ws):
-                if rec.get('id'):
-                    rec['Título da Ocorrência'] = get_final_title(rec, "simple_call")
-                    all_occurrences.append(rec)
-        if equip_ws:
-            for rec in self._get_all_records_safe(equip_ws):
-                if rec.get('id'):
-                    rec['Título da Ocorrência'] = get_final_title(rec, "equipment")
-                    all_occurrences.append(rec)
-        
-        # Atualiza o cache
-        self._cache[cache_key] = {'data': all_occurrences, 'timestamp': datetime.now()}
-
-        return sorted(all_occurrences, key=lambda x: x.get('Data de Registro', ''), reverse=True)
+    self._connect()
+    ws = self._get_worksheet(self.USERS_SHEET)
+    if not ws: return []
+    
+    records = [rec for rec in (self._get_all_records_safe(ws) or []) if rec.get("email")]
+    self._cache[cache_key]['data'] = records
+    self._cache[cache_key]['timestamp'] = datetime.now()
+    return records
 
 
-    def get_occurrences_by_user(self, user_email):
-        """Obtém as ocorrências visíveis para um utilizador específico."""
-        self._connect()
-        user_profile = self.check_user_status(user_email)
-        
-        if not user_profile or user_profile.get('status') != 'approved':
-            return []
-
-        main_group = user_profile.get("main_group", "").strip().upper()
-        user_company = user_profile.get("company", "").strip().upper()
-        
-        # Força o refresh da cache para garantir os dados mais recentes
-        all_occurrences = self.get_all_occurrences(force_refresh=True)
-        filtered_list = []
-
-        if main_group == '67_TELECOM':
-            return all_occurrences
-        elif main_group == 'PARTNER':
-            # CORREÇÃO: Lógica para parceiros
-            if not user_company: return []
-            for occ in all_occurrences:
-                # Pega o tipo de ocorrência pelo prefixo do ID
-                occ_id = occ.get('id', '')
-                occ_type = occ_id.split('-')[0].upper() if '-' in occ_id else ''
-                # Pega a empresa e o email do registrador
-                occ_registrador_company = occ.get('registrador company', '').strip().upper()
-                occ_registrador_email = occ.get('e-mail do registrador', '').strip().lower()
-
-                # Condição de visibilidade para parceiros
-                # A. É uma ocorrência de chamada (detalhada ou simples) da empresa do usuário?
-                is_company_call = (occ_type in ('CALL', 'SCALL')) and (occ_registrador_company == user_company)
-
-                # B. A ocorrência foi registrada pelo próprio usuário logado?
-                is_my_own_occurrence = (occ_registrador_email == user_email.strip().lower())
-
-                if is_company_call or is_my_own_occurrence:
-                    filtered_list.append(occ)
-
-            return filtered_list
-        elif main_group == 'PREFEITURA':
-            for occ in all_occurrences:
-                occ_group = (str(occ.get("registradormaingroup") or "")).upper()
-                occ_id = occ.get("id", "")
-                if (occ_group == "PREFEITURA" or
-                    (occ_id.startswith("EQUIP") and occ_group == "67_TELECOM") or
-                    (occ_id.startswith("SCALL") and occ_group == "67_TELECOM")):
-                    filtered_list.append(occ)
-            return filtered_list
-        return []
-
-    def get_all_users(self, force_refresh=False):
+    def get_all_users(self, force_refresh: bool = False) -> List[Dict[str, str]]:
         """Obtém todos os utilizadores registados, utilizando cache."""
         cache_key = self.USERS_SHEET
-        if not force_refresh and self._cache[cache_key]['data'] is not None and (datetime.now() - self._cache[cache_key]['timestamp']).total_seconds() < (self.CACHE_DURATION_MINUTES * 60):
-            return self._cache[cache_key]['data']
+        cache_data = self._cache[cache_key]['data']
+        cache_timestamp = self._cache[cache_key]['timestamp']
+        
+        is_cache_valid = (
+            cache_data is not None and
+            cache_timestamp is not None and
+            (datetime.now() - cache_timestamp).total_seconds() < (self.CACHE_DURATION_MINUTES * 60)
+        )
+        if not force_refresh and is_cache_valid:
+            return cache_data or []
             
         self._connect()
         ws = self._get_worksheet(self.USERS_SHEET)
         if not ws: return []
         
-        records = [rec for rec in self._get_all_records_safe(ws) if rec.get("email")]
+        records = [rec for rec in (self._get_all_records_safe(ws) or []) if rec.get("email")]
         self._cache[cache_key]['data'] = records
         self._cache[cache_key]['timestamp'] = datetime.now()
         return records
 
-    def request_access(self, email, full_name, username, main_group, sub_group, company_name=None):
+    def request_access(self, email: str, full_name: str, username: str, main_group: str, sub_group: str, company_name: Optional[str] = None) -> Tuple[bool, str]:
         """Envia uma solicitação de acesso para um novo utilizador."""
         self._connect()
         ws = self._get_worksheet(self.USERS_SHEET)
-        if not ws: return bool(False), "Falha ao aceder à planilha."
+        if not ws: return False, "Falha ao aceder à planilha."
 
         try:
-            # Não usa cache aqui para garantir que a verificação é em tempo real
             all_users_records = self._get_all_records_safe(ws)
+            if all_users_records is None:
+                return False, "Erro ao verificar e-mail existente: dados da planilha ausentes."
+            
             normalized_emails_in_sheet = [str(rec.get('email', '')).strip().lower() for rec in all_users_records]
-            if str(email).strip().lower() in normalized_emails_in_sheet:
-                return bool(False), "Solicitação já existe para este e-mail."
+            if email.strip().lower() in normalized_emails_in_sheet:
+                return False, "Solicitação já existe para este e-mail."
         except Exception as e:
-            return bool(False), f"Erro ao verificar e-mail existente: {e}"
+            return False, f"Erro ao verificar e-mail existente: {e}"
 
         new_row = [email, full_name, username, main_group, sub_group, "pending", company_name or ""]
         try:
             ws.append_row(new_row, value_input_option=ValueInputOption.user_entered)
-            self._cache[self.USERS_SHEET]['data'] = None # Invalida o cache de usuários
-            return bool(True), "Solicitação de acesso enviada com sucesso."
+            self._cache[self.USERS_SHEET]['data'] = None
+            return True, "Solicitação de acesso enviada com sucesso."
         except Exception as e:
-            return bool(False), f"Ocorreu um erro ao enviar a solicitação: {e}"
+            return False, f"Ocorreu um erro ao enviar a solicitação: {e}"
 
-    def get_pending_requests(self):
+    def get_pending_requests(self) -> List[Dict[str, str]]:
         """Obtém todas as solicitações de acesso pendentes, utilizando cache."""
         self._connect()
         ws = self._get_worksheet(self.USERS_SHEET)
         if not ws: return []
         
-        # Obtém os usuários, usando o cache se disponível
         all_users = self.get_all_users()
-        return [user for user in all_users if user.get("status") and str(user.get("status")).strip().lower() == "pending"]
+        return [user for user in (all_users or []) if user.get("status") and str(user.get("status")).strip().lower() == "pending"]
 
-    def update_user_status(self, email, new_status):
+    def update_user_status(self, email: str, new_status: str) -> Tuple[bool, str]:
         """Atualiza o status de um utilizador específico."""
         self._connect()
         ws = self._get_worksheet(self.USERS_SHEET)
-        if not ws: return bool(False), "Falha ao aceder à planilha de usuários."
+        if not ws: return False, "Falha ao aceder à planilha de usuários."
         try:
             cell = ws.find(email, in_column=1)
             if cell: 
                 ws.update_cell(cell.row, 6, new_status)
-                self._cache[self.USERS_SHEET]['data'] = None # Invalida o cache de usuários
-            return bool(True), "Status do usuário atualizado com sucesso."
-        except gspread.exceptions.CellNotFound: # type: ignore
-            print(f"Usuário {email} não encontrado.")
-            return bool(False), f"Usuário {email} não encontrado na planilha."
+                self._cache[self.USERS_SHEET]['data'] = None
+            return True, "Status do usuário atualizado com sucesso."
         except Exception as e:
-            print(f"Erro ao atualizar status do usuário {email}: {e}")
-            return bool(False), f"Erro ao atualizar status do usuário {email}: {e}"
+            if "not found" in str(e).lower():
+                print(f"Usuário {email} não encontrado.")
+                return False, f"Usuário {email} não encontrado na planilha."
+            else:
+                print(f"Erro ao atualizar status do usuário {email}: {e}")
+                return False, f"Erro ao atualizar status do usuário {email}: {e}"
 
-    def get_occurrence_by_id(self, occurrence_id):
-        """Obtém os detalhes de uma ocorrência pelo seu ID."""
-        self._connect()
-        # Busca no cache ou na planilha se o cache estiver vazio
-        all_occurrences = self.get_all_occurrences()
-        for occ in all_occurrences:
-            if str(occ.get('id')).strip().lower() == str(occurrence_id).strip().lower():
-                return occ
-        return None
-
-    def update_occurrence_status(self, occurrence_id, new_status):
+    def update_occurrence_status(self, occurrence_id: str, new_status: str) -> Tuple[bool, str]:
         """Atualiza o status de uma ocorrência específica."""
         self._connect()
-        sheet_name, status_col = None, 7
-        occ_id_lower = str(occurrence_id).strip().lower()
+        sheet_name, status_col = "", 7
+        occ_id_lower = occurrence_id.strip().lower()
         if 'scall' in occ_id_lower: sheet_name = self.SIMPLE_CALLS_SHEET
         elif 'call' in occ_id_lower: sheet_name = self.CALLS_SHEET
         elif 'equip' in occ_id_lower:
             sheet_name = self.EQUIPMENT_SHEET
             status_col = 6
-        if not sheet_name: return bool(False), "Tipo de ocorrência desconhecido."
+        if not sheet_name: return False, "Tipo de ocorrência desconhecido."
 
         ws = self._get_worksheet(sheet_name)
-        if not ws: return bool(False), f"Falha ao aceder à planilha {sheet_name}."
+        if not ws: return False, f"Falha ao aceder à planilha {sheet_name}."
 
         try:
             cell = ws.find(occurrence_id, in_column=1)
             if cell:
                 ws.update_cell(cell.row, status_col, new_status)
-                self._cache.pop("all_occurrences_cache", None) # Invalida o cache de ocorrências
-                self._cache[sheet_name]['data'] = None
-                return bool(True), "Status atualizado com sucesso."
+                self._cache.pop("all_occurrences_cache", None)
+                if self._cache.get(sheet_name):
+                    self._cache[sheet_name]['data'] = None
+                return True, "Status atualizado com sucesso."
             else:
-                return bool(False), f"Ocorrência {occurrence_id} não encontrada."
-        except gspread.exceptions.CellNotFound: # type: ignore
-            return bool(False), f"Ocorrência com ID {occurrence_id} não encontrada."
+                return False, f"Ocorrência {occurrence_id} não encontrada."
         except Exception as e:
-            return bool(False), f"Erro ao atualizar o status da ocorrência {occurrence_id}: {e}"
+            if "not found" in str(e).lower():
+                return False, f"Ocorrência com ID {occurrence_id} não encontrada."
+            else:
+                return False, f"Erro ao atualizar o status da ocorrência {occurrence_id}: {e}"
 
-    def register_simple_call_occurrence(self, user_email, data):
-        """Regista uma nova ocorrência de chamada simplificada."""
-        self._connect()
-        ws = self._get_worksheet(self.SIMPLE_CALLS_SHEET)
-        if not ws: return bool(False), "Falha ao aceder à planilha."
-
-        try:
-            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            current_records = self._get_all_records_safe(ws)
-            new_id = f"SCALL-{len([rec for rec in current_records if rec.get('id')]) + 1:04d}"
-            user_profile = self.check_user_status(user_email)
-            title_to_register = f"CHAMADA SIMPLES DE {data.get('origem', 'N/A')} PARA {data.get('destino', 'N/A')}"
-            new_row = [
-                new_id, now, title_to_register,
-                user_email, user_profile.get("name", "N/A"), user_profile.get("username", "N/A"),
-                'REGISTRADO', data.get('origem'), data.get('destino'), data.get('descricao'),
-                user_profile.get("main_group", "N/A"), user_profile.get("company", "")
-            ]
-            ws.append_row(new_row, value_input_option=ValueInputOption.user_entered)
-            self._cache.pop("all_occurrences_cache", None) # Invalida o cache
-            self._cache[self.SIMPLE_CALLS_SHEET]['data'] = None
-            return bool(True), "Ocorrência registrada com sucesso."
-        except Exception as e:
-            return bool(False), f"Ocorreu um erro ao registrar: {e}"
-
-    def register_equipment_occurrence(self, user_credentials, user_email, data, attachment_paths):
-        """Regista uma nova ocorrência de suporte a equipamento."""
-        self._connect()
-        ws = self._get_worksheet(self.EQUIPMENT_SHEET)
-        if not ws: return bool(False), "Falha ao aceder à planilha de equipamentos."
-
-        upload_success, result = self._upload_files_to_drive(user_credentials, attachment_paths)
-        if not upload_success: return bool(False), result
-
-        attachment_links_json = json.dumps(result)
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        current_records = self._get_all_records_safe(ws)
-        new_id = f"EQUIP-{len([rec for rec in current_records if rec.get('id')]) + 1:04d}"
-        user_profile = self.check_user_status(user_email)
-        title_to_register = data.get('tipo', f"EQUIPAMENTO {new_id}")
-        new_row = [
-            new_id, now, user_email, user_profile.get("name", "N/A"), user_profile.get("username", "N/A"),
-            'REGISTRADO', title_to_register, data.get('modelo'), data.get('ramal'),
-            data.get('localizacao'), data.get('descricao'), attachment_links_json,
-            user_profile.get("main_group", "N/A"), user_profile.get("company", "")
-        ]
-        try:
-            ws.append_row(new_row, value_input_option=ValueInputOption.user_entered)
-            self._cache.pop("all_occurrences_cache", None) # Invalida o cache
-            self._cache[self.EQUIPMENT_SHEET]['data'] = None
-            return bool(True), "Ocorrência de equipamento registrada com sucesso."
-        except Exception as e:
-            return bool(False), f"Ocorreu um erro ao registrar: {e}"
-
-    def register_full_occurrence(self, user_email, title, testes):
-        """Regista uma nova ocorrência de chamada detalhada."""
-        self._connect()
-        ws = self._get_worksheet(self.CALLS_SHEET)
-        if not ws: return bool(False), "Falha ao aceder à planilha de chamadas."
-
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        current_records = self._get_all_records_safe(ws)
-        new_id = f"CALL-{len([rec for rec in current_records if rec.get('id')]) + 1:04d}"
-        user_profile = self.check_user_status(user_email)
-        
-        op_a = testes[0]['op_a'] if testes and isinstance(testes, list) and len(testes) > 0 else 'N/A'
-        op_b = testes[0]['op_b'] if testes and isinstance(testes, list) and len(testes) > 0 else 'N/A'
-        description = testes[0]['obs'] if testes and isinstance(testes, list) and len(testes) > 0 else ""
-        testes_json = json.dumps(testes)
-
-        new_row = [
-            new_id, now, title, user_email, user_profile.get("name", "N/A"), user_profile.get("username", "N/A"),
-            'REGISTRADO', op_a, op_b, testes_json, description,
-            user_profile.get("main_group", "N/A"), user_profile.get("company", "")
-        ]
-        try:
-            ws.append_row(new_row, value_input_option=ValueInputOption.user_entered)
-            self._cache.pop("all_occurrences_cache", None) # Invalida o cache
-            self._cache[self.CALLS_SHEET]['data'] = None
-            return bool(True), "Ocorrência detalhada registrada com sucesso."
-        except Exception as e:
-            return bool(False), f"Ocorreu um erro ao registrar: {e}"
-
-    def add_occurrence_comment(self, occurrence_id, user_email, user_name, comment_text):
-        """Adiciona um novo comentário a uma ocorrência."""
-        self._connect()
-        ws = self._get_worksheet(self.OCCURRENCE_COMMENTS_SHEET)
-        if not ws: return bool(False), "Falha ao aceder à planilha de comentários."
-
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        comment_id = f"COM-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
-        new_row = [occurrence_id, comment_id, user_email, user_name, now, comment_text]
-        try:
-            ws.append_row(new_row, value_input_option=ValueInputOption.user_entered)
-            return bool(True), "Comentário adicionado com sucesso."
-        except Exception as e:
-            return bool(False), f"Ocorreu um erro ao adicionar o comentário: {e}"
-
-    def update_occurrence_comment(self, comment_id, new_comment_text):
+    def update_occurrence_comment(self, comment_id: str, new_comment_text: str) -> Tuple[bool, str]:
         """Atualiza o texto de um comentário existente."""
         self._connect()
         ws = self._get_worksheet(self.OCCURRENCE_COMMENTS_SHEET)
-        if not ws: return bool(False), "Falha ao aceder à planilha de comentários."
+        if not ws: return False, "Falha ao aceder à planilha de comentários."
 
         try:
             cell = ws.find(comment_id, in_column=2)
             if cell:
                 ws.update_cell(cell.row, 6, new_comment_text)
-                return bool(True), "Comentário atualizado com sucesso."
+                return True, "Comentário atualizado com sucesso."
             else:
-                return bool(False), f"Comentário com ID {comment_id} não encontrado."
-        except gspread.exceptions.CellNotFound: # type: ignore
-            return bool(False), f"Comentário com ID {comment_id} não encontrado."
+                return False, f"Comentário com ID {comment_id} não encontrado."
         except Exception as e:
-            return bool(False), f"Erro ao atualizar o comentário {comment_id}: {e}"
+            if "not found" in str(e).lower():
+                return False, f"Comentário com ID {comment_id} não encontrado."
+            else:
+                return False, f"Erro ao atualizar o comentário {comment_id}: {e}"
 
-    def delete_occurrence_comment(self, comment_id):
+    def delete_occurrence_comment(self, comment_id: str) -> Tuple[bool, str]:
         """Elimina um comentário da planilha."""
         self._connect()
         ws = self._get_worksheet(self.OCCURRENCE_COMMENTS_SHEET)
-        if not ws: return bool(False), "Falha ao aceder à planilha de comentários."
+        if not ws: return False, "Falha ao aceder à planilha de comentários."
 
         try:
             cell = ws.find(comment_id, in_column=2)
             if cell:
                 ws.delete_rows(cell.row)
-                return bool(True), "Comentário eliminado com sucesso."
+                return True, "Comentário eliminado com sucesso."
             else:
-                return bool(False), f"Comentário com ID {comment_id} não encontrado."
-        except gspread.exceptions.CellNotFound: # type: ignore
-            return bool(False), f"Comentário com ID {comment_id} não encontrado."
+                return False, f"Comentário com ID {comment_id} não encontrado."
         except Exception as e:
-            return bool(False), f"Erro ao eliminar o comentário {comment_id}: {e}"
+            if "not found" in str(e).lower():
+                return False, f"Comentário com ID {comment_id} não encontrado."
+            else:
+                return False, f"Erro ao eliminar o comentário {comment_id}: {e}"
 
-    def get_occurrence_comments(self, occurrence_id):
+    def get_occurrence_comments(self, occurrence_id: str) -> List[Dict[str, str]]:
         """Obtém todos os comentários associados a uma ocorrência."""
         self._connect()
         ws = self._get_worksheet(self.OCCURRENCE_COMMENTS_SHEET)
@@ -609,29 +473,40 @@ class SheetsService:
 
         try:
             all_comments = self._get_all_records_safe(ws)
+            if not all_comments:
+                return []
             filtered_comments = [
                 comment for comment in all_comments
-                if comment.get('id_ocorrencia') and str(comment['id_ocorrencia']).strip().lower() == str(occurrence_id).strip().lower()
+                if comment.get('id_ocorrencia') and str(comment['id_ocorrencia']).strip().lower() == occurrence_id.strip().lower()
             ]
             return sorted(filtered_comments, key=lambda x: x.get('Data_Comentario', ''), reverse=True)
         except Exception as e:
             print(f"Erro ao obter comentários da ocorrência {occurrence_id}: {e}")
             return []
 
-    def get_all_operators(self, force_refresh=False):
+    def get_all_operators(self, force_refresh: bool = False) -> List[str]:
         """Obtém a lista de todas as operadoras da planilha de operadores."""
         cache_key = self.OPERATORS_SHEET
-        if not force_refresh and self._cache[cache_key]['data'] is not None and (datetime.now() - self._cache[cache_key]['timestamp']).total_seconds() < (self.CACHE_DURATION_MINUTES * 60):
-            return self._cache[cache_key]['data']
+        cache_data = self._cache[cache_key]['data']
+        cache_timestamp = self._cache[cache_key]['timestamp']
+        
+        is_cache_valid = (
+            cache_data is not None and
+            cache_timestamp is not None and
+            (datetime.now() - cache_timestamp).total_seconds() < (self.CACHE_DURATION_MINUTES * 60)
+        )
+        if not force_refresh and is_cache_valid:
+            return cache_data or []
             
         self._connect()
         ws = self._get_worksheet(self.OPERATORS_SHEET)
         if not ws:
             return []
         try:
-            operators = [row[0] for row in ws.get_all_values() if row and row[0].strip()][1:]
+            all_records = self._get_all_records_safe(ws)
+            operators = [rec.get('operadora', '') for rec in (all_records or []) if rec.get('operadora')]
             if not operators:
-                print(f"AVISO: A planilha '{self.OPERATORS_SHEET}' está vazia ou não contém operadoras na primeira coluna.")
+                print(f"AVISO: A planilha '{self.OPERATORS_SHEET}' está vazia ou não contém operadoras.")
                 messagebox.showwarning("Dados Incompletos", f"A planilha '{self.OPERATORS_SHEET}' está vazia ou não contém dados de operadoras. As sugestões não serão exibidas.")
                 return []
             

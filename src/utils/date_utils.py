@@ -2,8 +2,6 @@
 # FICHEIRO: src/utils/date_utils.py
 # DESCRIÇÃO: Funções utilitárias para manipulação segura de datas e timezones.
 # DATA DA ATUALIZAÇÃO: 27/08/2025
-# NOTAS: Nenhuma alteração de código foi necessária neste ficheiro para a
-#        nova estrutura.
 # ==============================================================================
 
 import datetime

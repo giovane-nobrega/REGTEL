@@ -2,8 +2,6 @@
 # ARQUIVO: src/services/occurrence_service.py
 # DESCRIÇÃO: Encapsula a lógica de negócio para o gerenciamento de ocorrências.
 # DATA DA ATUALIZAÇÃO: 28/08/2025
-# NOTAS: Este arquivo foi atualizado para incluir a lógica de comentários
-#        anteriormente no sheets_service.py.
 # ==============================================================================
 
 import json

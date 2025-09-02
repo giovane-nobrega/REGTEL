@@ -1,7 +1,7 @@
 # ==============================================================================
 # ARQUIVO: src/services/updater.py
 # DESCRIÇÃO: Script auxiliar para baixar e executar o novo instalador da aplicação.
-#            Este script é executado pela aplicação principal quando uma atualização é detectada.
+# DATA DA ATUALIZAÇÃO: 28/08/2025
 # ==============================================================================
 
 import requests

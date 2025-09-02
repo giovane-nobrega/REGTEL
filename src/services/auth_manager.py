@@ -3,7 +3,6 @@
 # DESCRIÇÃO: Gerencia o armazenamento seguro das credenciais de sessão do usuário,
 #            incluindo criptografia.
 # DATA DA ATUALIZAÇÃO: 28/08/2025
-# NOTAS: Este arquivo foi refatorado para incluir criptografia de sessão.
 # ==============================================================================
 
 import os

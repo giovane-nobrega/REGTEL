@@ -1,10 +1,7 @@
 # ==============================================================================
 # FICHEIRO: main.py
 # DESCRIÇÃO: Ponto de entrada principal da aplicação REGTEL.
-#            Configura o ambiente e inicia a janela principal.
 # DATA DA ATUALIZAÇÃO: 27/08/2025
-# NOTAS: Nenhuma alteração de código foi necessária neste ficheiro para a
-#        nova estrutura, pois a lógica de adição de 'src' ao path já é correta.
 # ==============================================================================
 
 import sys
@@ -14,7 +11,6 @@ import traceback
 from builtins import ImportError, Exception, print
 
 # Adiciona a pasta 'src' ao caminho do Python para encontrar os módulos
-# (Assumindo que este ficheiro está na raiz do projeto, e os outros em /src)
 SRC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src')
 if SRC_PATH not in sys.path:
     sys.path.insert(0, SRC_PATH)

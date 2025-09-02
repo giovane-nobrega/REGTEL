@@ -2,7 +2,6 @@
 # ARQUIVO: src/services/user_service.py
 # DESCRIÇÃO: Encapsula a lógica de negócio para o gerenciamento de usuários.
 # DATA DA ATUALIZAÇÃO: 28/08/2025
-# NOTAS: Nenhuma alteração de código foi necessária neste ficheiro.
 # ==============================================================================
 
 class UserService:

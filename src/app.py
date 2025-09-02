@@ -2,8 +2,6 @@
 # FICHEIRO: src/app.py
 # DESCRIÇÃO: Controlador principal da aplicação.
 # DATA DA ATUALIZAÇÃO: 28/08/2025
-# NOTAS: Corrigido o alerta do Pylance em autocomplete_widget.py
-#        ao garantir que a instância da App seja explicitamente seu próprio controlador.
 # ==============================================================================
 
 import customtkinter as ctk
@@ -19,7 +17,7 @@ from builtins import super, print, Exception, hasattr, len, max, range, int, str
 
 # --- Imports de serviços e utils (caminhos inalterados) ---
 from services.auth_service import AuthService
-from services.sheets_service import SheetsService
+from services.sheets_service import SheetsService as SheetsServiceClass
 from services.occurrence_service import OccurrenceService
 from services.user_service import UserService
 
@@ -79,16 +77,13 @@ class App(ctk.CTk):
 
         self.configure(fg_color=self.BASE_COLOR)
 
-        # --- SOLUÇÃO PARA O ALERTA DO PYLANCE NO AUTOCOMPLETE_WIDGET ---
-        # A instância da App é o controlador principal, então atribuímos a si mesma.
+        # A instância da App é o controlador principal
         self.controller = self 
-        # --- FIM DA SOLUÇÃO ---
 
         # --- Configuração do Ícone ---
         if getattr(sys, '_MEIPASS', None): # type: ignore
             base_path = sys._MEIPASS # type: ignore
         else:
-            # O caminho a partir de 'src/app.py' para a raiz é '..'
             base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
         icon_path = os.path.join(base_path, 'icon.ico')
@@ -102,7 +97,7 @@ class App(ctk.CTk):
 
         # --- Inicialização dos Serviços e Variáveis de Estado ---
         self.auth_service = AuthService()
-        self.sheets_service = SheetsService(self.auth_service)
+        self.sheets_service = SheetsServiceClass(self.auth_service)
         self.occurrence_service = OccurrenceService(self.sheets_service, self.auth_service)
         self.user_service = UserService(self.sheets_service)
 
@@ -414,7 +409,6 @@ class App(ctk.CTk):
             NotificationPopup(self, message="Atualização adiada. Pode verificar novamente mais tarde.", type="info")
 
     def initiate_update(self):
-        # O caminho para o updater.py é relativo a 'src/app.py'
         if getattr(sys, '_MEIPASS', None): # type: ignore
             updater_script_path = os.path.join(sys._MEIPASS, 'services', 'updater.py') # type: ignore
         else:
