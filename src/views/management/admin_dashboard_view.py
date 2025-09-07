@@ -46,11 +46,20 @@ class AdminDashboardView(ctk.CTkFrame):
 
     def _load_card_data(self):
         """ Busca os dados para os cards em segundo plano. """
-        pending_req_count = len(self.controller.get_pending_requests())
-        self.after(0, lambda: self.pending_access_card.configure(text=str(pending_req_count)))
-        
-        active_users_count = len([u for u in self.controller.get_all_users(True) if u.get('status') == 'approved'])
-        self.after(0, lambda: self.active_users_card.configure(text=str(active_users_count)))
-        
-        pending_occ_count = len([o for o in self.controller.get_all_occurrences(True) if o.get('Status') not in ['RESOLVIDO', 'CANCELADO']])
-        self.after(0, lambda: self.pending_occurrences_card.configure(text=str(pending_occ_count)))
+        try:
+            pending_req_count = len(self.controller.get_pending_requests())
+            self.after(0, lambda: self.pending_access_card.configure(text=str(pending_req_count)))
+            
+            active_users_count = len([u for u in self.controller.get_all_users(True) if u.get('status') == 'approved'])
+            self.after(0, lambda: self.active_users_card.configure(text=str(active_users_count)))
+            
+            # Usa o método específico para admin que retorna todas as ocorrências
+            all_occurrences = self.controller.get_all_occurrences_for_admin(True)
+            pending_occ_count = len([o for o in all_occurrences if o.get('Status') not in ['RESOLVIDO', 'CANCELADO']])
+            self.after(0, lambda: self.pending_occurrences_card.configure(text=str(pending_occ_count)))
+        except Exception as e:
+            print(f"Erro ao carregar dados do dashboard: {e}")
+            # Define valores padrão em caso de erro
+            self.after(0, lambda: self.pending_access_card.configure(text="0"))
+            self.after(0, lambda: self.active_users_card.configure(text="0"))
+            self.after(0, lambda: self.pending_occurrences_card.configure(text="0"))

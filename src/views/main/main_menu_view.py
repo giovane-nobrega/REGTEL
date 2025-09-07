@@ -160,6 +160,14 @@ class MainMenuView(ctk.CTkFrame):
         main_group = user_profile.get("main_group")
         sub_group = user_profile.get("sub_group")
         print(f"DEBUG: main_group: {main_group}, sub_group: {sub_group}")
+        
+        # Se não há perfil válido, mostra apenas botões básicos
+        if not main_group or not sub_group:
+            print("DEBUG: Perfil inválido, mostrando apenas botões básicos")
+            self.history_button.pack(pady=8, padx=20, fill="x")
+            self.logout_button.pack(pady=(20, 8), padx=20, fill="x")
+            self.exit_button.pack(pady=8, padx=20, fill="x")
+            return
 
         # Lógica para exibir botões com base no grupo principal e subgrupo.
         if main_group == "67_TELECOM" and sub_group == "SUPER_ADMIN":

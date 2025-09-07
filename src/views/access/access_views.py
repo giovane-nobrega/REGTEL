@@ -12,7 +12,6 @@ from tkinter import messagebox
 import re
 import threading
 import time
-from builtins import bool, hasattr, super, len, range
 
 class RequestAccessView(ctk.CTkFrame):
     """

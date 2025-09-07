@@ -294,7 +294,7 @@ class AdminDashboardView(ctk.CTkFrame):
         self.status_filter_admin.set("TODOS")
         self.type_filter_admin.set("TODOS")
         self.start_date_entry_admin.delete(0, "end")
-        self.end_date_entry_admin.delete("0", "end")
+        self.end_date_entry_admin.delete(0, "end")
 
         self.start_date_entry_admin.configure(border_color=self.default_border_color_admin)
         self.end_date_entry_admin.configure(border_color=self.default_border_color_admin)
@@ -322,7 +322,7 @@ class AdminDashboardView(ctk.CTkFrame):
         end_date_str = self.end_date_entry_admin.get()
 
         # Obter a lista de ocorrências ativas do controller (já filtradas por status resolvido/cancelado)
-        all_active_occurrences = self.controller.sheets_service.get_active_occurrences_for_admin_dashboard()
+        all_active_occurrences = self.controller.get_all_occurrences_for_admin()
 
         filtered_list = all_active_occurrences
 
@@ -369,12 +369,7 @@ class AdminDashboardView(ctk.CTkFrame):
 
 
     def load_all_occurrences(self, force_refresh=False):
-        # Altere esta linha para chamar o novo método
-        if force_refresh:
-            occurrences_to_load = self.controller.sheets_service.get_active_occurrences_for_admin_dashboard()
-        else:
-            occurrences_to_load = self.controller.sheets_service.get_active_occurrences_for_admin_dashboard()
-
+        occurrences_to_load = self.controller.get_all_occurrences_for_admin(force_refresh=force_refresh)
         threading.Thread(target=lambda: self.after(0, self._populate_all_occurrences, occurrences_to_load), daemon=True).start()
 
     def _populate_all_occurrences(self, all_occurrences_list):

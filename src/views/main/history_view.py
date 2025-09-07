@@ -14,7 +14,6 @@
 import customtkinter as ctk
 import threading
 from functools import partial
-import json
 from tkinter import messagebox
 from datetime import datetime
 import re # Importação adicionada para validação com regex
@@ -296,8 +295,8 @@ class HistoryView(ctk.CTkFrame):
     def _load_history_thread(self):
         """Busca os dados no serviço, armazena no cache e chama a atualização da UI."""
         # CORREÇÃO: Chamar get_occurrences_by_user para respeitar a visibilidade de grupos
-        user_email = self.controller.user_email
-        all_user_visible_occurrences = self.controller.sheets_service.get_occurrences_by_user(user_email)
+        # A função do controller agora chama o método correto no sheets_service.
+        all_user_visible_occurrences = self.controller.get_all_occurrences(force_refresh=True)
 
         if self.current_mode == "pending":
             # Filtra ocorrências que NÃO estão resolvidas ou canceladas
@@ -516,13 +515,10 @@ class HistoryView(ctk.CTkFrame):
         stats_text = ""
         if main_group == 'PARTNER':
             company_name = user_profile.get("company", "N/A")
-            stats_text = f"Estatística: {len(occurrences)} chamadas da {company_name}"
+            stats_text = f"Estatística: {len(occurrences)} ocorrências da {company_name}"
         elif main_group == 'PREFEITURA':
-            # CORREÇÃO: Usar a chave normalizada 'registradormaingroup' para o filtro
-            own_occurrences = [occ for occ in occurrences if occ.get('registradormaingroup', '').upper() == 'PREFEITURA']
-            own_count = len(own_occurrences)
-            external_count = len(occurrences) - own_count
-            stats_text = f"Estatística: {own_count} suas + {external_count} da 67 Telecom"
+            # Com as novas regras, a lista 'occurrences' já está filtrada, então a contagem é direta.
+            stats_text = f"Estatística: {len(occurrences)} ocorrências da Prefeitura"
         elif main_group == '67_TELECOM':
             stats_text = f"Estatística: {len(occurrences)} ocorrências no total"
         

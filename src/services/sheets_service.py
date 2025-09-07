@@ -10,13 +10,13 @@
 
 import gspread
 import json
+import uuid
 import csv
 from datetime import datetime, timedelta
 from googleapiclient.http import MediaFileUpload
 import os
 from tkinter import messagebox
 import threading
-from builtins import Exception, print, len, str, sorted, list, set, enumerate, dict, bool, isinstance, range
 from gspread.utils import ValueInputOption
 from typing import Optional, Dict, Any, List, Union, Tuple
 
@@ -33,6 +33,10 @@ class SheetsService:
         self.SIMPLE_CALLS_SHEET = "simple_call_occurrences"
         self.EQUIPMENT_SHEET = "equipment_occurrences"
         self.OCCURRENCE_COMMENTS_SHEET = "occurrence_comments"
+        # NOTA: A constante OCCURRENCES_SHEET não estava definida.
+        # Se você tiver uma aba que consolida todas as ocorrências, adicione o nome dela aqui.
+        # Por enquanto, será comentado para evitar erros.
+        # self.OCCURRENCES_SHEET = "all_occurrences"
         self.OPERATORS_SHEET = "operators"
 
         self.gspread_lock = threading.Lock()
@@ -50,13 +54,17 @@ class SheetsService:
         }
         self.CACHE_DURATION_MINUTES = 5
 
+
     def _connect(self):
         """Conecta-se ao Google Sheets."""
+        print(f"DEBUG: Tentando conectar ao Google Sheets...")
         if self.is_connected and self._SPREADSHEET:
             try:
                 if self._SPREADSHEET.id:
+                    print(f"DEBUG: Já conectado ao Sheets")
                     return
             except Exception:
+                print(f"DEBUG: Conexão anterior inválida, reconectando...")
                 self.is_connected = False
                 self._GC = None
                 self._SPREADSHEET = None
@@ -65,16 +73,22 @@ class SheetsService:
             if self.is_connected:
                 return
 
+            print(f"DEBUG: Obtendo credenciais da conta de serviço...")
             self._SERVICE_CREDENTIALS = self.auth_service.get_service_account_credentials()
             if not self._SERVICE_CREDENTIALS:
+                print(f"DEBUG: Erro ao obter credenciais da conta de serviço")
                 self.is_connected = False
                 return
 
             try:
+                print(f"DEBUG: Conectando com gspread...")
                 self._GC = gspread.service_account(filename=self.auth_service.SERVICE_ACCOUNT_FILE)
+                print(f"DEBUG: Abrindo planilha com ID: {self.SPREADSHEET_ID}")
                 self._SPREADSHEET = self._GC.open_by_key(self.SPREADSHEET_ID)
                 self.is_connected = True
+                print(f"DEBUG: Conectado com sucesso ao Google Sheets")
             except Exception as e:
+                 print(f"DEBUG: Erro ao conectar ao Google Sheets: {e}")
                  messagebox.showerror("Erro de Conexão", f"Não foi possível conectar ao Google Sheets: {e}")
                  self.is_connected = False
                  self._GC = None
@@ -134,31 +148,31 @@ class SheetsService:
                 processed_records.append(processed_rec)
             return processed_records
 
-def _share_file_with_users(self, drive_service: Any, file_id: str, uploader_email: str):
-    """Compartilha o arquivo com o uploader e administradores."""
-    emails_to_share_with = {uploader_email}
-    
-    try:
-        all_users = self.get_all_users()
-        if all_users:
-            admins = [
-                user.get('email') for user in all_users 
-                if user.get('sub_group') in ['ADMIN', 'SUPER_ADMIN'] and user.get('email')
-            ]
-            emails_to_share_with.update(admins)
-    except Exception as e:
-        print(f"AVISO: Não foi possível obter lista de administradores: {e}")
-
-    for email in emails_to_share_with:
+    def _share_file_with_users(self, drive_service: Any, file_id: str, uploader_email: str):
+        """Compartilha o arquivo com o uploader e administradores."""
+        emails_to_share_with = {uploader_email}
+        
         try:
-            permission = {
-                'type': 'user',
-                'role': 'reader',
-                'emailAddress': email
-            }
-            drive_service.permissions().create(fileId=file_id, body=permission, fields='id').execute()
+            all_users = self.get_all_users()
+            if all_users:
+                admins = [
+                    user.get('email') for user in all_users 
+                    if user.get('sub_group') in ['ADMIN', 'SUPER_ADMIN'] and user.get('email')
+                ]
+                emails_to_share_with.update(admins)
         except Exception as e:
-            print(f"AVISO: Não foi possível compartilhar o arquivo {file_id} com {email}. Erro: {e}")
+            print(f"AVISO: Não foi possível obter lista de administradores: {e}")
+
+        for email in emails_to_share_with:
+            try:
+                permission = {
+                    'type': 'user',
+                    'role': 'reader',
+                    'emailAddress': email
+                }
+                drive_service.permissions().create(fileId=file_id, body=permission, fields='id').execute()
+            except Exception as e:
+                print(f"AVISO: Não foi possível compartilhar o arquivo {file_id} com {email}. Erro: {e}")
 
     def _upload_files_to_drive(self, user_credentials: Any, file_paths: List[str], uploader_email: str) -> Tuple[bool, Union[str, List[str]]]:
         """Faz upload de ficheiros para o Google Drive."""
@@ -194,7 +208,99 @@ def _share_file_with_users(self, drive_service: Any, file_id: str, uploader_emai
         except Exception as e:
             return False, f"Ocorreu um erro durante o upload para o Google Drive: {e}"
 
+    # --- MÉTODOS DE CRIAÇÃO DE OCORRÊNCIAS ---
 
+    def register_full_occurrence(self, user_email: str, title: str, tests: List[Dict[str, str]]) -> Tuple[bool, str]:
+        """Registra uma ocorrência de chamada detalhada com testes."""
+        self._connect()
+        ws = self._get_worksheet(self.CALLS_SHEET)
+        if not ws:
+            return False, "Falha ao aceder à planilha de ocorrências de chamada."
+
+        user_profile = self.check_user_status(user_email)
+        if not user_profile or user_profile.get("status") != "approved":
+            return False, "Utilizador não autorizado."
+
+        try:
+            occurrence_id = f"CALL-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
+            registration_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            status = "REGISTRADO"
+            tests_json = json.dumps(tests)
+
+            new_row = [
+                occurrence_id, title, registration_date, user_email,
+                user_profile.get("name", ""), user_profile.get("username", ""),
+                status, tests_json, "[]", # Anexos (vazio por defeito)
+                user_profile.get("main_group", ""), user_profile.get("company", "")
+            ]
+            
+            ws.append_row(new_row, value_input_option=ValueInputOption.user_entered)
+            self._cache.pop("all_occurrences_cache", None)
+            return True, f"Ocorrência {occurrence_id} registada com sucesso."
+        except Exception as e:
+            return False, f"Erro ao registar ocorrência: {e}"
+
+    def register_simple_call_occurrence(self, user_email: str, data: Dict[str, str]) -> Tuple[bool, str]:
+        """Registra uma ocorrência de chamada simplificada."""
+        self._connect()
+        ws = self._get_worksheet(self.SIMPLE_CALLS_SHEET)
+        if not ws: return False, "Falha ao aceder à planilha de chamadas simples."
+
+        user_profile = self.check_user_status(user_email)
+        if not user_profile or user_profile.get("status") != "approved": return False, "Utilizador não autorizado."
+
+        try:
+            occurrence_id = f"SCALL-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
+            registration_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            status = "REGISTRADO"
+            title = f"CHAMADA SIMPLES DE {data.get('origem', 'N/A')} PARA {data.get('destino', 'N/A')}"
+
+            new_row = [
+                occurrence_id, title, registration_date, user_email,
+                user_profile.get("name", ""), user_profile.get("username", ""), status,
+                data.get("origem", ""), data.get("destino", ""), data.get("operadora", ""),
+                data.get("status_chamada", ""), data.get("observacoes", ""),
+                user_profile.get("main_group", ""), user_profile.get("company", "")
+            ]
+            ws.append_row(new_row, value_input_option=ValueInputOption.user_entered)
+            self._cache.pop("all_occurrences_cache", None)
+            return True, f"Ocorrência {occurrence_id} registada com sucesso."
+        except Exception as e:
+            return False, f"Erro ao registar ocorrência de chamada simples: {e}"
+
+    def register_equipment_occurrence(self, user_credentials: Any, user_email: str, data: Dict[str, str], attachment_paths: List[str]) -> Tuple[bool, str]:
+        """Registra uma ocorrência de equipamento, com upload de anexos."""
+        self._connect()
+        ws = self._get_worksheet(self.EQUIPMENT_SHEET)
+        if not ws: return False, "Falha ao aceder à planilha de ocorrências de equipamento."
+
+        user_profile = self.check_user_status(user_email)
+        if not user_profile or user_profile.get("status") != "approved": return False, "Utilizador não autorizado."
+
+        uploaded_file_links = []
+        if attachment_paths:
+            success, result = self._upload_files_to_drive(user_credentials, attachment_paths, user_email)
+            if not success: return False, f"Falha no upload de anexos: {result}"
+            uploaded_file_links = result
+
+        try:
+            occurrence_id = f"EQUIP-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4hex[:4].upper()}"
+            registration_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            status = "REGISTRADO"
+            title = f"SUPORTE EQUIPAMENTO: {data.get('tipo_equipamento', 'N/A')} - {data.get('localizacao', 'N/A')}"
+            anexos_json = json.dumps(uploaded_file_links)
+
+            new_row = [
+                occurrence_id, title, registration_date, user_email, user_profile.get("name", ""), status,
+                data.get("tipo_equipamento", ""), data.get("modelo", ""), data.get("ramal", ""),
+                data.get("localizacao", ""), data.get("descricao_problema", ""), anexos_json,
+                user_profile.get("main_group", ""), user_profile.get("company", "")
+            ]
+            ws.append_row(new_row, value_input_option=ValueInputOption.user_entered)
+            self._cache.pop("all_occurrences_cache", None)
+            return True, f"Ocorrência {occurrence_id} registada com sucesso."
+        except Exception as e:
+            return False, f"Erro ao registar ocorrência de equipamento: {e}"
 
     def batch_update_occurrence_statuses(self, changes: Dict[str, str]) -> Tuple[bool, str]:
         """Atualiza múltiplos status de ocorrências de uma só vez."""
@@ -263,9 +369,12 @@ def _share_file_with_users(self, drive_service: Any, file_id: str, uploader_emai
 
     def check_user_status(self, email: str) -> Dict[str, str]:
         """Verifica o status e o perfil de um utilizador."""
+        print(f"DEBUG: Verificando status do usuário: {email}")
         self._connect()
+        print(f"DEBUG: Conectado ao Sheets: {self.is_connected}")
         ws = self._get_worksheet(self.USERS_SHEET)
         if not ws:
+            print("DEBUG: Erro ao acessar planilha de usuários")
             return {"status": "error"}
         
         cache_key = self.USERS_SHEET
@@ -291,34 +400,13 @@ def _share_file_with_users(self, drive_service: Any, file_id: str, uploader_emai
         if records is None:
             return {"status": "error"}
             
+        print(f"DEBUG: Buscando usuário em {len(records) if records else 0} registros")
         for user_rec in records:
             if user_rec.get("email") and str(user_rec["email"]).strip().lower() == email.strip().lower():
+                print(f"DEBUG: Usuário encontrado: {user_rec}")
                 return user_rec
+        print(f"DEBUG: Usuário não encontrado, retornando unregistered")
         return {"status": "unregistered"}
-
-def get_all_users(self, force_refresh: bool = False) -> List[Dict[str, str]]:
-    """Obtém todos os utilizadores registados, utilizando cache."""
-    cache_key = self.USERS_SHEET
-    cache_data = self._cache[cache_key]['data']
-    cache_timestamp = self._cache[cache_key]['timestamp']
-    
-    is_cache_valid = (
-        cache_data is not None and
-        cache_timestamp is not None and
-        (datetime.now() - cache_timestamp).total_seconds() < (self.CACHE_DURATION_MINUTES * 60)
-    )
-    if not force_refresh and is_cache_valid:
-        return cache_data or []
-        
-    self._connect()
-    ws = self._get_worksheet(self.USERS_SHEET)
-    if not ws: return []
-    
-    records = [rec for rec in (self._get_all_records_safe(ws) or []) if rec.get("email")]
-    self._cache[cache_key]['data'] = records
-    self._cache[cache_key]['timestamp'] = datetime.now()
-    return records
-
 
     def get_all_users(self, force_refresh: bool = False) -> List[Dict[str, str]]:
         """Obtém todos os utilizadores registados, utilizando cache."""
@@ -518,3 +606,132 @@ def get_all_users(self, force_refresh: bool = False) -> List[Dict[str, str]]:
             print(f"Erro ao obter lista de operadoras da planilha '{self.OPERATORS_SHEET}': {e}")
             messagebox.showerror("Erro de Leitura", f"Ocorreu um erro ao ler a lista de operadoras da planilha '{self.OPERATORS_SHEET}': {e}")
             return []
+
+    def get_occurrence_by_id(self, occurrence_id: str) -> Optional[Dict[str, str]]:
+        """Obtém os detalhes de uma ocorrência específica pelo seu ID."""
+        all_occurrences = self.get_all_occurrences()
+        
+        for occ in all_occurrences:
+            if occ.get('ID') and str(occ['ID']).strip().lower() == occurrence_id.strip().lower():
+                return occ
+        
+        all_occurrences_fresh = self.get_all_occurrences(force_refresh=True)
+        for occ in all_occurrences_fresh:
+            if occ.get('ID') and str(occ['ID']).strip().lower() == occurrence_id.strip().lower():
+                return occ
+        
+        return None
+
+    def add_occurrence_comment(self, occurrence_id: str, user_email: str, user_name: str, comment_text: str) -> Tuple[bool, str]:
+        """Adiciona um novo comentário a uma ocorrência."""
+        self._connect()
+        ws = self._get_worksheet(self.OCCURRENCE_COMMENTS_SHEET)
+        if not ws: return False, "Falha ao aceder à planilha de comentários."
+
+        try:
+            comment_id = f"CMT-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
+            comment_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            new_row = [occurrence_id, comment_id, user_email, user_name, comment_date, comment_text]
+
+            ws.append_row(new_row, value_input_option=ValueInputOption.user_entered)
+            return True, "Comentário adicionado com sucesso."
+        except Exception as e:
+            return False, f"Erro ao adicionar comentário: {e}"
+
+
+    # --- MÉTODOS DE OCORRÊNCIAS (Combinados) ---
+
+    def get_all_occurrences(self, force_refresh: bool = False) -> List[Dict[str, str]]:
+        """
+        Obtém TODAS as ocorrências de todas as abas (chamada, equipamento, etc.),
+        utilizando um cache consolidado.
+        """
+        cache_key = "all_occurrences_cache"
+        cache_entry = self._cache.get(cache_key)
+
+        if cache_entry:
+            is_cache_valid = (
+                cache_entry.get('data') is not None and
+                cache_entry.get('timestamp') is not None and
+                (datetime.now() - cache_entry['timestamp']).total_seconds() < (self.CACHE_DURATION_MINUTES * 60)
+            )
+            if not force_refresh and is_cache_valid:
+                return cache_entry['data'] or []
+
+        all_occurrences = []
+        sheet_names = [self.CALLS_SHEET, self.SIMPLE_CALLS_SHEET, self.EQUIPMENT_SHEET]
+
+        for sheet_name in sheet_names:
+            ws = self._get_worksheet(sheet_name)
+            if ws:
+                try:
+                    records = self._get_all_records_safe(ws)
+                    if records:
+                        all_occurrences.extend(records)
+                except Exception as e:
+                    print(f"Erro ao ler a aba '{sheet_name}': {e}")
+
+        # Ordena por data de registro, do mais novo para o mais antigo
+        # Adicionado tratamento para casos onde a data pode estar ausente ou mal formatada
+        def sort_key(occ):
+            date_str = occ.get('Data de Registro')
+            if not date_str:
+                return datetime.min
+            try:
+                return datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+            except (ValueError, TypeError):
+                return datetime.min
+
+        sorted_occurrences = sorted(all_occurrences, key=sort_key, reverse=True)
+
+        self._cache[cache_key] = {'data': sorted_occurrences, 'timestamp': datetime.now()}
+        return sorted_occurrences
+
+
+    def get_all_occurrences_for_admin(self, force_refresh: bool = False) -> List[Dict[str, str]]:
+        """Obtém todas as ocorrências para o dashboard de admin, utilizando cache."""
+        # Este método agora é um wrapper para get_all_occurrences, pois o admin vê tudo.
+        return self.get_all_occurrences(force_refresh=force_refresh)
+
+    def get_occurrences_by_user(self, user_email: str, force_refresh: bool = False) -> List[Dict[str, str]]:
+        """
+        Obtém as ocorrências visíveis para um utilizador específico, respeitando as regras de grupo.
+        - 67_TELECOM: Acesso total a todas as ocorrências.
+        - PREFEITURA: Acesso apenas a ocorrências do grupo 'PREFEITURA'.
+        - PARTNER: Acesso apenas a ocorrências da sua própria empresa dentro do grupo 'PARTNER'.
+        - Outros: Acesso apenas às ocorrências que registou.
+        """
+        all_occurrences = self.get_all_occurrences(force_refresh=force_refresh)
+        user_profile = self.check_user_status(user_email)
+
+        main_group = user_profile.get("main_group")
+        if not main_group:
+            return []
+
+        # Super Admins e Admins (67_TELECOM) veem tudo
+        if main_group == "67_TELECOM":
+            return all_occurrences
+
+        # Prefeitura vê APENAS as suas próprias ocorrências
+        if main_group == "PREFEITURA":
+            return [
+                occ for occ in all_occurrences
+                if str(occ.get('registradormaingroup', '')).upper() == "PREFEITURA"
+            ]
+
+        # Parceiros veem APENAS as da sua própria empresa
+        if main_group == "PARTNER":
+            user_company = user_profile.get("company")
+            if not user_company:
+                # Se um parceiro não tem empresa definida, não deve ver nenhuma ocorrência de parceiro.
+                return []
+            
+            return [
+                occ for occ in all_occurrences
+                if str(occ.get('registradormaingroup', '')).upper() == "PARTNER" and \
+                   str(occ.get('registradorcompany', '')).upper() == str(user_company).upper()
+            ]
+
+        # Caso padrão (se houver outros grupos no futuro), mostra apenas as próprias
+        return [occ for occ in all_occurrences if occ.get('Registrador (e-mail)') == user_email]

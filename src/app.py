@@ -13,9 +13,6 @@ import sys
 import requests
 import subprocess
 import time
-from builtins import super, print, Exception, hasattr, len, max, range, int, str, dict, open
-
-# --- Imports de serviços e utils (caminhos inalterados) ---
 from services.auth_service import AuthService
 from services.sheets_service import SheetsService as SheetsServiceClass
 from services.occurrence_service import OccurrenceService
@@ -40,10 +37,12 @@ from views.components.notification_popup import NotificationPopup
 
 class App(ctk.CTk):
     def __init__(self):
+        print("DEBUG: Iniciando aplicação REGTEL...")
         # --- Configuração do Logging ---
         log_dir = os.path.join(os.path.expanduser("~"), "AppData", "Local", "REGTEL_Logs")
         os.makedirs(log_dir, exist_ok=True)
         self.log_file_path = os.path.join(log_dir, "app_debug.log")
+        print(f"DEBUG: Log será salvo em: {self.log_file_path}")
 
         try:
             self._log_file = open(self.log_file_path, 'w', encoding='utf-8')
@@ -96,10 +95,15 @@ class App(ctk.CTk):
             print(f"Aviso: Ocorreu um erro inesperado ao definir o ícone da janela: {e}")
 
         # --- Inicialização dos Serviços e Variáveis de Estado ---
+        print("DEBUG: Inicializando serviços...")
         self.auth_service = AuthService()
+        print("DEBUG: AuthService inicializado")
         self.sheets_service = SheetsServiceClass(self.auth_service)
+        print("DEBUG: SheetsService inicializado")
         self.occurrence_service = OccurrenceService(self.sheets_service, self.auth_service)
+        print("DEBUG: OccurrenceService inicializado")
         self.user_service = UserService(self.sheets_service)
+        print("DEBUG: UserService inicializado")
 
         self.credentials = None
         self.user_email = "Carregando..."
@@ -125,12 +129,15 @@ class App(ctk.CTk):
         self.current_frame = None
         self.previous_frame_name = None
 
+        print("DEBUG: Inicializando views...")
         for F in view_classes:
             page_name = F.__name__
+            print(f"DEBUG: Inicializando {page_name}...")
             frame = F(parent=container, controller=self)
             self.frames[page_name] = frame
             frame.place(relwidth=1.0, relheight=1.0)
 
+        print("DEBUG: Verificando login inicial...")
         self.check_initial_login()
 
         # --- Configurações de Atualização Automática ---
@@ -206,28 +213,39 @@ class App(ctk.CTk):
 
     def _fetch_user_profile(self):
         self.user_email = str(self.auth_service.get_user_email(self.credentials))
+        print(f"DEBUG: Email obtido: {self.user_email}")
         if "Erro" in self.user_email or not self.user_email.strip():
             self.after(0, lambda: messagebox.showerror("Erro de Autenticação", "Não foi possível obter o seu e-mail. Por favor, tente novamente ou contacte o suporte."))
             self.after(0, self.perform_logout)
             return
+        print(f"DEBUG: Buscando perfil do usuário: {self.user_email}")
         self.user_profile = self.user_service.get_user_status(self.user_email)
+        print(f"DEBUG: Perfil obtido: {self.user_profile}")
         self.after(0, self.navigate_based_on_status)
 
     def navigate_based_on_status(self):
         status = self.user_profile.get("status")
         main_group = self.user_profile.get("main_group")
         sub_group = self.user_profile.get("sub_group")
+        print(f"DEBUG: Navegando baseado no status - Status: {status}, Main Group: {main_group}, Sub Group: {sub_group}")
+        
         if status == "approved":
+            print("DEBUG: Usuário aprovado, carregando dados secundários...")
             self.load_secondary_data()
             main_menu = self.frames["MainMenuView"]
+            print("DEBUG: Atualizando informações do menu principal...")
             main_menu.update_user_info(self.user_email, self.user_profile, self.CURRENT_APP_VERSION)
             if main_group == "67_TELECOM" and sub_group == "SUPER_ADMIN":
+                print("DEBUG: Super admin detectado, mostrando dashboard...")
                 self.show_frame("AdminDashboardView")
                 return
+            print("DEBUG: Mostrando menu principal...")
             self.show_frame("MainMenuView")
         elif status == "pending":
+            print("DEBUG: Usuário pendente, mostrando tela de aprovação...")
             self.show_frame("PendingApprovalView")
         else:
+            print("DEBUG: Usuário não registrado, mostrando tela de solicitação...")
             self.frames["RequestAccessView"].on_show()
             self.show_frame("RequestAccessView")
 
@@ -261,6 +279,10 @@ class App(ctk.CTk):
             exclude_statuses_upper = [s.upper() for s in exclude_statuses]
             return [occ for occ in occurrences if occ.get('Status', '').upper() not in exclude_statuses_upper]
         return occurrences
+
+    def get_all_occurrences_for_admin(self, force_refresh=False):
+        """Método específico para o dashboard de admin - retorna todas as ocorrências"""
+        return self.sheets_service.get_all_occurrences_for_admin(force_refresh)
 
     def get_all_users(self, force_refresh=False):
         return self.user_service.get_all_users(force_refresh)

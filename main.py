@@ -8,7 +8,6 @@ import sys
 import os
 from tkinter import messagebox
 import traceback
-from builtins import ImportError, Exception, print
 
 # Adiciona a pasta 'src' ao caminho do Python para encontrar os módulos
 SRC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src')
@@ -21,8 +20,9 @@ try:
 except ImportError as ea:
     # Mostra um erro claro se a estrutura de pastas estiver incorreta
     messagebox.showerror(
-        "Erro de Importação",
-        f"Não foi possível encontrar o módulo 'app'. Verifique a estrutura de pastas.\n\n"
+        "Erro de Estrutura do Projeto",
+        f"Não foi possível encontrar o módulo 'app' no diretório 'src'.\n"
+        f"Verifique se a estrutura de pastas do projeto está correta.\n\n"
         f"Detalhes: {ea}"
     )
     sys.exit(1)

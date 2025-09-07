@@ -1,1 +1,1 @@
-pyinstaller main.py --onefile --windowed --add-data client_secrets.json;. --add-data service_account.json;. --add-data icon.ico;. --hidden-import=cryptography.hazmat.backends.openssl.backend
+pyinstaller main.py --onefile --windowed --add-data "credentials;credentials" --add-data "icon.ico;." --hidden-import=cryptography.hazmat.backends.openssl.backend
