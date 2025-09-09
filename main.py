@@ -15,8 +15,13 @@ if SRC_PATH not in sys.path:
     sys.path.insert(0, SRC_PATH)
 
 try:
-    # Importa a classe principal da aplicação a partir do módulo app
-    from app import App
+    # Com 'src' no sys.path, podemos importar 'app' diretamente.
+    # Para o Pyright/Pylance reconhecer esta importação, é necessário
+    # ter a seguinte configuração no ficheiro .vscode/settings.json:
+    # {
+    #   "python.analysis.extraPaths": ["./src"]
+    # }
+    from src.app import App
 except ImportError as ea:
     # Mostra um erro claro se a estrutura de pastas estiver incorreta
     messagebox.showerror(
