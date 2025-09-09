@@ -1,32 +1,58 @@
-# Pastas de build e distribuição
-build/
-dist/
-__pycache__/
-
-# Ambiente virtual
-venv/
-.venv/
-
-# Credenciais e arquivos de sessão (MUITO IMPORTANTE!)
+==============================================================================
+Arquivo .gitignore para o projeto REGTEL (Versão Complementada)
+Este arquivo especifica quais arquivos e pastas devem ser ignorados pelo Git.
+==============================================================================
+Credenciais e arquivos de sessão (MUITO IMPORTANTE!)
+Nunca adicione chaves de API, segredos ou arquivos de sessão ao repositório.
+credentials/
 client_secrets.json
 service_account.json
+session.json
+encryption.key
 token.json
 .regtel/
 session.auth
-session.json
 
-# Logs e arquivos temporários
-*.log
-*.tmp
-*.bak
+Pastas de build, distribuição e cache
+build/
+dist/
+Output/
+pycache/
 *.pyc
 *.pyo
 *.pyd
 
-# Arquivos de IDE (VS Code)
-.vscode/
+Ambiente virtual
+venv/
+.venv/
+env/
 
-# Arquivos de instalador (se gerados na raiz do projeto)
+Arquivo de especificação do PyInstaller
+*.spec
+
+Logs e arquivos temporários
+*.log
+*.tmp
+*.bak
+app_debug.log
+
+Arquivos de IDE e Configuração Local
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+Arquivos de backup e documentos do usuário
+bkp/
+*.bkp
+*.bak
+*.xlsx
+
+Arquivos de instalador gerados
 *.iss
 *.exe
 *.msi
+
+Arquivos do Sistema Operacional
+.DS_Store
+Thumbs.db
