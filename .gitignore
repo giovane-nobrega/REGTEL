@@ -12,6 +12,7 @@ encryption.key
 token.json
 .regtel/
 session.auth
+session.json
 
 Pastas de build, distribuição e cache
 build/
