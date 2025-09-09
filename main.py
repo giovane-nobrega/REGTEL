@@ -16,7 +16,7 @@ if SRC_PATH not in sys.path:
 
 try:
     # Importa a classe principal da aplicação a partir do módulo app
-    from app import App
+    from src.app import App
 except ImportError as ea:
     # Mostra um erro claro se a estrutura de pastas estiver incorreta
     messagebox.showerror(
