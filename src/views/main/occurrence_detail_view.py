@@ -29,11 +29,21 @@ class OccurrenceDetailView(ctk.CTkToplevel):
 
         self.controller = master
 
-        self.configure(fg_color=self.controller.BASE_COLOR)
+        # Definir cores padrão caso o controller não tenha os atributos de cor
+        self.BASE_COLOR = getattr(master, 'BASE_COLOR', '#0A0E1A')
+        self.TEXT_COLOR = getattr(master, 'TEXT_COLOR', '#FFFFFF')
+        self.PRIMARY_COLOR = getattr(master, 'PRIMARY_COLOR', '#1C274C')
+        self.ACCENT_COLOR = getattr(master, 'ACCENT_COLOR', '#3A7EBF')
+        self.GRAY_BUTTON_COLOR = getattr(master, 'GRAY_BUTTON_COLOR', '#333333')
+        self.GRAY_HOVER_COLOR = getattr(master, 'GRAY_HOVER_COLOR', '#444444')
+        self.DANGER_COLOR = getattr(master, 'DANGER_COLOR', '#BF3A3A')
+        self.DANGER_HOVER_COLOR = getattr(master, 'DANGER_HOVER_COLOR', '#A93232')
+
+        self.configure(fg_color=self.BASE_COLOR)
 
         scrollable_frame = ctk.CTkScrollableFrame(self, label_text="Informações da Ocorrência",
-                                                  fg_color=self.controller.BASE_COLOR,
-                                                  label_text_color=self.controller.TEXT_COLOR)
+                                                  fg_color=self.BASE_COLOR,
+                                                  label_text_color=self.TEXT_COLOR)
         scrollable_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
         details_frame = ctk.CTkFrame(scrollable_frame, fg_color="transparent")
@@ -103,7 +113,7 @@ class OccurrenceDetailView(ctk.CTkToplevel):
             row_frame.pack(fill="x", padx=10, pady=2)
 
             key_label = ctk.CTkLabel(row_frame, text=f"{display_name}:", font=ctk.CTkFont(weight="bold"),
-                                     width=200, anchor="e", text_color=self.controller.TEXT_COLOR)
+                                     width=200, anchor="e", text_color=self.TEXT_COLOR)
             key_label.pack(side="left", padx=(0, 10))
 
             value_label = ctk.CTkLabel(row_frame, text=formatted_value, wraplength=300, justify="left",
@@ -117,7 +127,7 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                 testes = json.loads(testes_data)
                 if testes:
                     tests_header_label = ctk.CTkLabel(scrollable_frame, text="Testes de Ligação:", font=ctk.CTkFont(size=14, weight="bold"),
-                                                      text_color=self.controller.TEXT_COLOR)
+                                                      text_color=self.TEXT_COLOR)
                     tests_header_label.pack(fill="x", padx=10, pady=(15, 5), anchor="w")
 
                     tests_container = ctk.CTkFrame(scrollable_frame, fg_color="gray20")
@@ -133,7 +143,7 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                             f"  - Obs: {teste.get('obs', 'N/A')}"
                         )
                         test_card = ctk.CTkLabel(tests_container, text=card_text, justify="left", anchor="w",
-                                                 text_color=self.controller.TEXT_COLOR)
+                                                 text_color=self.TEXT_COLOR)
                         test_card.pack(fill="x", padx=10, pady=5)
             except (json.JSONDecodeError, TypeError):
                 pass
@@ -144,7 +154,7 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                 anexos = json.loads(anexos_data)
                 if anexos:
                     anexos_header_label = ctk.CTkLabel(scrollable_frame, text="Anexos:", font=ctk.CTkFont(size=14, weight="bold"),
-                                                      text_color=self.controller.TEXT_COLOR)
+                                                      text_color=self.TEXT_COLOR)
                     anexos_header_label.pack(fill="x", padx=10, pady=(15, 5), anchor="w")
 
                     anexos_container = ctk.CTkFrame(scrollable_frame, fg_color="gray20")
@@ -155,7 +165,7 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                         link_label = ctk.CTkLabel(
                             anexos_container,
                             text=f"Anexo {i+1}: Abrir no navegador",
-                            text_color=(self.controller.PRIMARY_COLOR, self.controller.ACCENT_COLOR),
+                            text_color=(self.PRIMARY_COLOR, self.ACCENT_COLOR),
                             cursor="hand2",
                             font=link_font
                         )
@@ -165,29 +175,29 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                 pass
 
         self.comments_header_label = ctk.CTkLabel(scrollable_frame, text="Comentários:", font=ctk.CTkFont(size=14, weight="bold"),
-                                                  text_color=self.controller.TEXT_COLOR)
+                                                  text_color=self.TEXT_COLOR)
         self.comments_header_label.pack(fill="x", padx=10, pady=(15, 5), anchor="w")
 
         self.comments_container = ctk.CTkFrame(scrollable_frame, fg_color="gray20")
         self.comments_container.pack(fill="x", padx=10, pady=5)
 
         self.new_comment_textbox = ctk.CTkTextbox(scrollable_frame, height=80,
-                                                  fg_color="gray20", text_color=self.controller.TEXT_COLOR,
+                                                  fg_color="gray20", text_color=self.TEXT_COLOR,
                                                   border_color="gray40")
         self.new_comment_textbox.pack(fill="x", padx=10, pady=(10, 5))
 
         self.add_comment_button = ctk.CTkButton(scrollable_frame, text="Adicionar Comentário",
                                                 command=self._add_or_update_comment,
-                                                fg_color=self.controller.PRIMARY_COLOR, text_color=self.controller.TEXT_COLOR,
-                                                hover_color=self.controller.ACCENT_COLOR)
+                                                fg_color=self.PRIMARY_COLOR, text_color=self.TEXT_COLOR,
+                                                hover_color=self.ACCENT_COLOR)
         self.add_comment_button.pack(fill="x", padx=10, pady=(0, 10))
 
         self._load_comments(occurrence_data.get('ID', 'N/A'))
 
         close_button = ctk.CTkButton(self, text="Fechar", command=self.destroy,
-                                     fg_color=self.controller.GRAY_BUTTON_COLOR,
-                                     text_color=self.controller.TEXT_COLOR,
-                                     hover_color=self.controller.GRAY_HOVER_COLOR)
+                                     fg_color=self.GRAY_BUTTON_COLOR,
+                                     text_color=self.TEXT_COLOR,
+                                     hover_color=self.GRAY_HOVER_COLOR)
         close_button.pack(pady=10)
 
     def _load_comments(self, occurrence_id):
@@ -195,8 +205,11 @@ class OccurrenceDetailView(ctk.CTkToplevel):
         for widget in self.comments_container.winfo_children():
             widget.destroy()
 
-        # CORREÇÃO: Chama o método do serviço de ocorrências
-        comments = self.controller.occurrence_service.get_comments(occurrence_id)
+        # Tenta obter comentários do controller, se disponível
+        comments = []
+        if hasattr(self.controller, 'occurrence_service'):
+            comments = self.controller.occurrence_service.get_comments(occurrence_id)
+        
         if not comments:
             ctk.CTkLabel(self.comments_container, text="Nenhum comentário ainda.", text_color="gray60").pack(padx=10, pady=5)
             return
@@ -215,9 +228,9 @@ class OccurrenceDetailView(ctk.CTkToplevel):
                     pass
 
             header_text = f"Por: {comment.get('Nome_Autor', 'N/A')} em {comment_date}"
-            ctk.CTkLabel(comment_frame, text=header_text, font=ctk.CTkFont(weight="bold"), text_color=self.controller.PRIMARY_COLOR).grid(row=0, column=0, sticky="w", padx=10, pady=(5,0))
+            ctk.CTkLabel(comment_frame, text=header_text, font=ctk.CTkFont(weight="bold"), text_color=self.PRIMARY_COLOR).grid(row=0, column=0, sticky="w", padx=10, pady=(5,0))
             
-            comment_text_label = ctk.CTkLabel(comment_frame, text=comment.get('Comentario', ''), wraplength=450, justify="left", text_color=self.controller.TEXT_COLOR)
+            comment_text_label = ctk.CTkLabel(comment_frame, text=comment.get('Comentario', ''), wraplength=450, justify="left", text_color=self.TEXT_COLOR)
             comment_text_label.grid(row=1, column=0, sticky="w", padx=10, pady=(0,5))
 
             if comment.get('Email_Autor') == self.controller.user_email:
@@ -232,7 +245,7 @@ class OccurrenceDetailView(ctk.CTkToplevel):
 
                 delete_button = ctk.CTkButton(button_frame, text="🗑️ Excluir", width=70, height=25,
                                               command=lambda c_id=comment.get('id_comentario'): self._delete_comment(c_id),
-                                              fg_color=self.controller.DANGER_COLOR, text_color="white", hover_color=self.controller.DANGER_HOVER_COLOR,
+                                              fg_color=self.DANGER_COLOR, text_color="white", hover_color=self.DANGER_HOVER_COLOR,
                                               font=ctk.CTkFont(size=11))
                 delete_button.pack(pady=(2, 0))
 
@@ -251,11 +264,15 @@ class OccurrenceDetailView(ctk.CTkToplevel):
             messagebox.showerror("Erro", "Não foi possível identificar a ocorrência para adicionar/atualizar o comentário.")
             return
 
+        if not hasattr(self.controller, 'occurrence_service'):
+            messagebox.showerror("Erro", "Serviço de ocorrências não disponível.")
+            return
+            
         if self.editing_comment_id:
             # CORREÇÃO: Chama o método do serviço de ocorrências
             success, message = self.controller.occurrence_service.update_comment(self.editing_comment_id, comment_text)
             self.editing_comment_id = None
-            self.add_comment_button.configure(text="Adicionar Comentário", fg_color=self.controller.PRIMARY_COLOR, hover_color=self.controller.ACCENT_COLOR)
+            self.add_comment_button.configure(text="Adicionar Comentário", fg_color=self.PRIMARY_COLOR, hover_color=self.ACCENT_COLOR)
         else:
             # CORREÇÃO: Chama o método do serviço de ocorrências
             success, message = self.controller.occurrence_service.add_comment(occurrence_id, user_email, user_name, comment_text)
@@ -279,6 +296,10 @@ class OccurrenceDetailView(ctk.CTkToplevel):
 
     def _delete_comment(self, comment_id):
         """Exclui um comentário após confirmação."""
+        if not hasattr(self.controller, 'occurrence_service'):
+            messagebox.showerror("Erro", "Serviço de ocorrências não disponível.")
+            return
+            
         if messagebox.askyesno("Confirmar Exclusão", "Tem certeza que deseja excluir este comentário? Esta ação não pode ser desfeita."):
             # CORREÇÃO: Chama o método do serviço de ocorrências
             success, message = self.controller.occurrence_service.delete_comment(comment_id)

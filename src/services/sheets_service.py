@@ -155,11 +155,15 @@ class SheetsService:
         try:
             all_users = self.get_all_users()
             if all_users:
-                admins = [
-                    user.get('email') for user in all_users 
-                    if user.get('sub_group') in ['ADMIN', 'SUPER_ADMIN'] and user.get('email')
-                ]
-                emails_to_share_with.update(admins)
+                # Coleta emails de administradores, garantindo que não sejam None
+                admin_emails: List[str] = []
+                for user in all_users:
+                    email = user.get('email')
+                    if (user.get('sub_group') in ['ADMIN', 'SUPER_ADMIN'] and 
+                        email is not None):
+                        admin_emails.append(email)
+                
+                emails_to_share_with.update(admin_emails)
         except Exception as e:
             print(f"AVISO: Não foi possível obter lista de administradores: {e}")
 
@@ -284,7 +288,7 @@ class SheetsService:
             uploaded_file_links = result
 
         try:
-            occurrence_id = f"EQUIP-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4hex[:4].upper()}"
+            occurrence_id = f"EQUIP-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
             registration_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             status = "REGISTRADO"
             title = f"SUPORTE EQUIPAMENTO: {data.get('tipo_equipamento', 'N/A')} - {data.get('localizacao', 'N/A')}"
@@ -319,9 +323,9 @@ class SheetsService:
             if ws:
                 ids_in_sheet = ws.col_values(1)
                 for i, occ_id in enumerate(ids_in_sheet):
-                    if i == 0: continue
-            if occ_id:  # Verificar se occ_id não é None ou vazio
-                all_ids_map[str(occ_id)] = {'sheet': sheet_name, 'row': i + 1}
+                    if i == 0: continue  # Pula o cabeçalho
+                    if occ_id:  # Verificar se occ_id não é None ou vazio
+                        all_ids_map[str(occ_id)] = {'sheet': sheet_name, 'row': i + 1}
 
         for occ_id, new_status in changes.items():
             if occ_id in all_ids_map:
@@ -735,3 +739,40 @@ class SheetsService:
 
         # Caso padrão (se houver outros grupos no futuro), mostra apenas as próprias
         return [occ for occ in all_occurrences if occ.get('Registrador (e-mail)') == user_email]
+
+    def clear_all_cache(self):
+        """Limpa todo o cache da planilha."""
+        for key in self._cache:
+            self._cache[key]['data'] = None
+            self._cache[key]['timestamp'] = None
+
+    def register_occurrence(self, user_email: str, data: Dict[str, str], tests: List[Dict[str, str]], attachment_path: Optional[str] = None) -> Tuple[bool, str]:
+        """Registra uma ocorrência de chamada detalhada com testes e anexos opcionais."""
+        self._connect()
+        ws = self._get_worksheet(self.CALLS_SHEET)
+        if not ws:
+            return False, "Falha ao aceder à planilha de ocorrências de chamada."
+
+        user_profile = self.check_user_status(user_email)
+        if not user_profile or user_profile.get("status") != "approved":
+            return False, "Utilizador não autorizado."
+
+        try:
+            occurrence_id = f"CALL-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
+            registration_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            status = "REGISTRADO"
+            tests_json = json.dumps(tests)
+            attachment_json = json.dumps([attachment_path] if attachment_path else [])
+
+            new_row = [
+                occurrence_id, data.get('title', ''), registration_date, user_email,
+                user_profile.get("name", ""), user_profile.get("username", ""),
+                status, tests_json, attachment_json,
+                user_profile.get("main_group", ""), user_profile.get("company", "")
+            ]
+            
+            ws.append_row(new_row, value_input_option=ValueInputOption.user_entered)
+            self._cache.pop("all_occurrences_cache", None)
+            return True, f"Ocorrência {occurrence_id} registada com sucesso."
+        except Exception as e:
+            return False, f"Erro ao registar ocorrência: {e}"

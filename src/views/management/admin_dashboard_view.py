@@ -24,10 +24,12 @@ class AdminDashboardView(ctk.CTkFrame):
         self.pending_occurrences_card = self._create_card(cards_container, "Ocorrências Pendentes", "...", 0, lambda: controller.show_frame("HistoryView", from_view="AdminDashboardView", mode="pending"))
         self.pending_access_card = self._create_card(cards_container, "Solicitações de Acesso", "...", 1, lambda: controller.show_frame("AccessManagementView"))
         self.active_users_card = self._create_card(cards_container, "Usuários Ativos", "...", 2, lambda: controller.show_frame("UserManagementView"))
+        # CORREÇÃO: Passar o from_view correto para o histórico geral
+        self._create_card(cards_container, "Histórico Geral de Ocorrências", "", 3, lambda: controller.show_frame("HistoryView", from_view="AdminDashboardView", mode="all"), button_text="Abrir Histórico")
 
         ctk.CTkButton(self, text="Voltar ao Menu", command=lambda: controller.show_frame("MainMenuView"), height=40).grid(row=2, column=0, pady=10, padx=20, sticky="ew")
 
-    def _create_card(self, parent, title, value, row, command):
+    def _create_card(self, parent, title, value, row, command, button_text="Ver Detalhes"):
         """ Cria um card de informação para o dashboard. """
         card_frame = ctk.CTkFrame(parent, fg_color="gray15", corner_radius=10)
         card_frame.grid(row=row, column=0, padx=10, pady=10, sticky="ew")
@@ -35,8 +37,9 @@ class AdminDashboardView(ctk.CTkFrame):
         
         ctk.CTkLabel(card_frame, text=title, font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, pady=(10, 5))
         value_label = ctk.CTkLabel(card_frame, text=value, font=ctk.CTkFont(size=28, weight="bold"), text_color=self.controller.ACCENT_COLOR)
-        value_label.grid(row=1, column=0, pady=5)
-        ctk.CTkButton(card_frame, text="Ver Detalhes", command=command).grid(row=2, column=0, pady=(5, 10), padx=10, sticky="ew")
+        if value:
+            value_label.grid(row=1, column=0, pady=5)
+        ctk.CTkButton(card_frame, text=button_text, command=command).grid(row=2, column=0, pady=(5, 10), padx=10, sticky="ew")
         
         return value_label
 

@@ -173,7 +173,19 @@ class RegistrationView(ctk.CTkFrame):
         self._clear_test_fields()
         self._update_test_display_list()
         self.add_test_button.configure(text="+ Adicionar Teste", fg_color=self.controller.PRIMARY_COLOR, hover_color=self.controller.ACCENT_COLOR)
-        self.set_operator_suggestions(self.controller.operator_list)
+        self.set_operator_suggestions(self.controller.get_operator_list())
+        self.set_submitting_state(False)
+        self.entry_ocorrencia_titulo.focus()
+
+    def clear_form(self):
+        """Limpa todos os campos do formulário."""
+        self.controller.testes_adicionados = []
+        self.controller.editing_index = None
+        self.entry_ocorrencia_titulo.delete(0, 'end')
+        self._clear_test_fields()
+        self._update_test_display_list()
+        self.add_test_button.configure(text="+ Adicionar Teste", fg_color=self.controller.PRIMARY_COLOR, hover_color=self.controller.ACCENT_COLOR)
+        self.set_operator_suggestions(self.controller.get_operator_list())
         self.set_submitting_state(False)
         self.entry_ocorrencia_titulo.focus()
 

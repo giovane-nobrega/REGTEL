@@ -23,7 +23,6 @@ try:
     # {
     #   "python.analysis.extraPaths": ["./src"]
     # }
-    from src.app import App
 except ImportError as ea:
     # Mostra um erro claro se a estrutura de pastas estiver incorreta
     messagebox.showerror(
@@ -42,6 +41,7 @@ if __name__ == "__main__":
     Função principal que é executada quando o script é chamado diretamente.
     """
     try:
+        
         # Cria uma instância da aplicação principal e inicia o seu loop de eventos.
         app = App()
         app.mainloop()

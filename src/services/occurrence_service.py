@@ -7,6 +7,7 @@
 import json
 from datetime import datetime
 from tkinter import messagebox
+from typing import Dict, Tuple
 
 class OccurrenceService:
     """ Encapsula a lógica de negócio para o gerenciamento de ocorrências. """
@@ -76,3 +77,9 @@ class OccurrenceService:
         Obtém todos os comentários associados a uma ocorrência.
         """
         return self.sheets_service.get_occurrence_comments(occurrence_id)
+
+    def register_simple_call_occurrence(self, user_email: str, user_profile: Dict[str, str], data: Dict[str, str]) -> Tuple[bool, str]:
+        """
+        Registra uma ocorrência de chamada simplificada.
+        """
+        return self.sheets_service.register_simple_call_occurrence(user_email, data)

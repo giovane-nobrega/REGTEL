@@ -27,414 +27,325 @@ from views.main.login_view import LoginView
 from views.main.main_menu_view import MainMenuView
 from views.main.occurrence_detail_view import OccurrenceDetailView
 from views.registration.registration_view import RegistrationView
-from views.registration.simple_call_view import SimpleCallView 
+from views.registration.simple_call_view import SimpleCallView
 from views.components.notification_popup import NotificationPopup
 from views.management.access_management_view import AccessManagementView
 from views.management.user_management_view import UserManagementView
-from views.components.autocomplete_widget import AutocompleteEntry
-from views.components.notification_popup import NotificationPopup
 
 
 class App(ctk.CTk):
-    def __init__(self):
-        print("DEBUG: Iniciando aplicação REGTEL...")
-        # --- Configuração do Logging ---
-        log_dir = os.path.join(os.path.expanduser("~"), "AppData", "Local", "REGTEL_Logs")
-        os.makedirs(log_dir, exist_ok=True)
-        self.log_file_path = os.path.join(log_dir, "app_debug.log")
-        print(f"DEBUG: Log será salvo em: {self.log_file_path}")
+    """
+    Controlador principal que gere a janela, a navegação entre frames (telas)
+    e a comunicação com os serviços de back-end.
+    """
+    # --- CONSTANTES DE CONFIGURAÇÃO ---
+    VERSION = "3.1.0"
+    VERSION_URL = "https://raw.githubusercontent.com/Valente97/regtel/main/version.json"
+    NEW_INSTALLER_DOWNLOAD_URL = ""
 
-        try:
-            self._log_file = open(self.log_file_path, 'w', encoding='utf-8')
-            sys.stdout = self._log_file
-            sys.stderr = self._log_file
-            print(f"--- REGTEL Debug Log Iniciado em: {self.log_file_path} ---")
-        except Exception as e:
-            sys.stdout = sys.__stdout__
-            sys.stderr = sys.__stderr__
-            print(f"ERRO: Não foi possível iniciar o log para o ficheiro: {self.log_file_path}. Detalhes: {e}")
-            messagebox.showerror("Erro de Log", f"Não foi possível iniciar o log da aplicação. Detalhes: {e}")
+    # --- ESQUEMA DE CORES ---
+    BASE_COLOR = "#0A0E1A"
+    PRIMARY_COLOR = "#1C274C"
+    ACCENT_COLOR = "#3A7EBF"
+    TEXT_COLOR = "#FFFFFF"
+    DANGER_COLOR = "#BF3A3A"
+    DANGER_HOVER_COLOR = "#A93232"
+    GRAY_BUTTON_COLOR = "#333333"
+    GRAY_HOVER_COLOR = "#444444"
 
-        # --- Inicialização da Janela Principal ---
-        super().__init__()
-        self.title("Plataforma de Registro de Ocorrências (REGTEL)")
-        self.geometry("900x750")
-        self.minsize(800, 650)
+    def __init__(self, *args, **kwargs):
+        """
+        Inicializa a aplicação, configura a janela principal,
+        instancia os serviços e prepara os frames (telas).
+        """
+        super().__init__(*args, **kwargs)
 
-        ctk.set_appearance_mode("Dark")
-        ctk.set_default_color_theme("blue")
+        self.title(f"REGTEL - Plataforma de Ocorrências v{self.VERSION}")
+        self.geometry("800x600")
+        self.minsize(600, 500)
 
-        # --- Cores da Aplicação ---
-        self.PRIMARY_COLOR = "#00BFFF"
-        self.ACCENT_COLOR = "#00CED1"
-        self.BASE_COLOR = "#0A0E1A"
-        self.TEXT_COLOR = "#FFFFFF"
-        self.DANGER_COLOR = "#D32F2F"
-        self.DANGER_HOVER_COLOR = "#B71C1C"
-        self.GRAY_BUTTON_COLOR = "gray50"
-        self.GRAY_HOVER_COLOR = "gray40"
+        # Configura o layout da janela principal para que os frames se expandam
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
 
-        self.configure(fg_color=self.BASE_COLOR)
-
-        # A instância da App é o controlador principal
-        self.controller = self 
-
-        # --- Configuração do Ícone ---
-        if getattr(sys, '_MEIPASS', None): # type: ignore
-            base_path = sys._MEIPASS # type: ignore
-        else:
-            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-        icon_path = os.path.join(base_path, 'icon.ico')
-
-        try:
-            self.iconbitmap(icon_path)
-        except tk.TclError as e:
-            print(f"Aviso: Não foi possível carregar o ícone da janela em '{icon_path}'. Erro: {e}")
-        except Exception as e:
-            print(f"Aviso: Ocorreu um erro inesperado ao definir o ícone da janela: {e}")
-
-        # --- Inicialização dos Serviços e Variáveis de Estado ---
-        print("DEBUG: Inicializando serviços...")
+        # --- INICIALIZAÇÃO DOS SERVIÇOS ---
         self.auth_service = AuthService()
-        print("DEBUG: AuthService inicializado")
         self.sheets_service = SheetsServiceClass(self.auth_service)
-        print("DEBUG: SheetsService inicializado")
         self.occurrence_service = OccurrenceService(self.sheets_service, self.auth_service)
-        print("DEBUG: OccurrenceService inicializado")
         self.user_service = UserService(self.sheets_service)
-        print("DEBUG: UserService inicializado")
 
-        self.credentials = None
-        self.user_email = "Carregando..."
+        # Variáveis de estado do utilizador
+        self.user_email = ""
         self.user_profile = {}
-        self.detail_window = None
-        self.testes_adicionados = []
-        self.editing_index = None
-        self.operator_list = []
-        self.occurrences_cache = None
-        self.users_cache = None
-
-        # --- Container Principal e Gestão de Frames (Telas) ---
-        container = ctk.CTkFrame(self, fg_color=self.BASE_COLOR)
-        container.pack(fill="both", expand=True)
-
         self.frames = {}
-        view_classes = (
-            LoginView, RequestAccessView, PendingApprovalView, MainMenuView,
-            AdminDashboardView, HistoryView, RegistrationView, SimpleCallView,
-            EquipmentView, AccessManagementView, UserManagementView
-        )
+        self._current_frame_name = None
 
-        self.current_frame = None
-        self.previous_frame_name = None
+        # Cria e armazena todas as telas da aplicação
+        # Nota: OccurrenceDetailView é um Toplevel, não um frame principal
+        for F in (LoginView, MainMenuView, RegistrationView, HistoryView,
+                  RequestAccessView, PendingApprovalView, SimpleCallView,
+                  EquipmentView, AdminDashboardView, AccessManagementView,
+                  UserManagementView):
+            frame_name = F.__name__
+            frame = F(parent=self, controller=self)
+            self.frames[frame_name] = frame
+            frame.grid(row=0, column=0, sticky="nsew")
 
-        print("DEBUG: Inicializando views...")
-        for F in view_classes:
-            page_name = F.__name__
-            print(f"DEBUG: Inicializando {page_name}...")
-            frame = F(parent=container, controller=self)
-            self.frames[page_name] = frame
-            frame.place(relwidth=1.0, relheight=1.0)
+        # Exibe a tela de login inicial
+        self.show_frame("LoginView")
 
-        print("DEBUG: Verificando login inicial...")
-        self.check_initial_login()
+    def show_frame(self, frame_name, from_view=None, **kwargs):
+        """
+        Mostra um frame específico e, se o frame tiver um método `on_show`,
+        chama-o para atualizar os seus dados.
+        """
+        if self._current_frame_name:
+             self.frames[self._current_frame_name].previous_view = from_view
 
-        # --- Configurações de Atualização Automática ---
-        self.CURRENT_APP_VERSION = "1.0.2"
-        self.REMOTE_VERSION_URL = "https://raw.githubusercontent.com/giovane-nobrega/REGTEL/master/updates/version.txt"
-        self.NEW_INSTALLER_DOWNLOAD_URL = "https://github.com/giovane-nobrega/REGTEL/releases/download/v1.0.2/REGTEL_Installer_1.0.2.exe"
-
-        self.after(2000, lambda: threading.Thread(target=self.check_for_updates, daemon=True).start())
-        
-    def show_frame(self, page_name, from_view=None, mode="all"):
-        if from_view and self.current_frame and from_view != page_name:
-            self.previous_frame_name = from_view
-        elif not from_view:
-            self.previous_frame_name = None
-
-        frame = self.frames[page_name]
+        frame = self.frames[frame_name]
         if hasattr(frame, 'on_show'):
-            if page_name == "HistoryView":
-                frame.on_show(self.previous_frame_name, mode=mode)
-            else:
-                frame.on_show()
-
+            frame.on_show(**kwargs)
         frame.tkraise()
-        self.current_frame = page_name
+        self._current_frame_name = frame_name
 
-    def show_occurrence_details(self, occurrence_id):
-        if self.detail_window and self.detail_window.winfo_exists():
-            self.detail_window.focus()
-            return
-        occurrence_data = self.occurrence_service.get_occurrence_details(occurrence_id)
-        if occurrence_data:
-            self.detail_window = OccurrenceDetailView(self, occurrence_data)
-        else:
-            messagebox.showerror("Erro", "Não foi possível encontrar os detalhes da ocorrência.")
-
-    def check_initial_login(self):
-        self.frames["LoginView"].set_loading_state("Verificando credenciais...")
-        threading.Thread(target=self._check_initial_login_thread, daemon=True).start()
-
-    def _check_initial_login_thread(self):
-        creds = self.auth_service.load_user_credentials()
-        if creds:
-            self.credentials = creds
-            self.after(0, self._fetch_user_profile)
-        else:
-            self.after(0, self.frames["LoginView"].set_default_state)
-            self.after(0, self.show_frame, "LoginView")
-
-    def load_secondary_data(self):
-        threading.Thread(target=self._load_operators_thread, daemon=True).start()
-
-    def _load_operators_thread(self):
-        self.operator_list = self.sheets_service.get_all_operators()
-        if "RegistrationView" in self.frames:
-            self.after(0, self.frames["RegistrationView"].set_operator_suggestions, self.operator_list)
 
     def perform_login(self):
-        self.frames["LoginView"].set_loading_state("Aguarde... Uma janela do navegador foi aberta para autenticação. Por favor, complete o login e retorne ao aplicativo.")
-        threading.Thread(target=self._run_login_flow_in_thread, daemon=True).start()
+        """
+        Inicia o processo de login em uma thread separada para não bloquear a UI.
+        """
+        login_view = self.frames["LoginView"]
+        login_view.set_loading_state("A autenticar com o Google...")
+        threading.Thread(target=self._login_thread, daemon=True).start()
 
-    def _run_login_flow_in_thread(self):
-        creds = self.auth_service.run_login_flow()
-        if creds:
-            self.auth_service.save_user_credentials(creds)
-            self.credentials = creds
-            self.after(0, self.deiconify)
-            self.after(0, self.lift)
-            self.after(0, self.focus_force)
-            self.after(0, self._fetch_user_profile)
+    def _login_thread(self):
+        """
+        Thread que executa o fluxo de autenticação.
+        """
+        credentials = self.auth_service.load_user_credentials()
+        
+        # Se não há credenciais válidas, inicia o fluxo de login OAuth
+        if not credentials:
+            credentials = self.auth_service.run_login_flow()
+        
+        self.after(0, self._handle_login_result, credentials)
+
+    def _handle_login_result(self, credentials):
+        """
+        Processa o resultado do login na thread principal da UI.
+        """
+        login_view = self.frames["LoginView"]
+        if credentials:
+            self.user_email = self.auth_service.get_user_email(credentials)
+            self._post_login_flow()
         else:
-            self.after(0, lambda: messagebox.showerror("Falha no Login", "O processo de login foi cancelado ou falhou. Por favor, tente novamente."))
-            self.after(0, self.frames["LoginView"].set_default_state)
+            login_view.set_default_state()
+            messagebox.showerror("Login Falhou", "Não foi possível autenticar com o Google.")
 
-    def _fetch_user_profile(self):
-        self.user_email = str(self.auth_service.get_user_email(self.credentials))
-        print(f"DEBUG: Email obtido: {self.user_email}")
-        if "Erro" in self.user_email or not self.user_email.strip():
-            self.after(0, lambda: messagebox.showerror("Erro de Autenticação", "Não foi possível obter o seu e-mail. Por favor, tente novamente ou contacte o suporte."))
-            self.after(0, self.perform_logout)
-            return
-        print(f"DEBUG: Buscando perfil do usuário: {self.user_email}")
+    def _post_login_flow(self):
+        """
+        Após um login bem-sucedido, busca o perfil do utilizador e navega para a tela apropriada.
+        """
+        login_view = self.frames["LoginView"]
+        login_view.set_loading_state("A verificar o seu perfil de utilizador...")
+
         self.user_profile = self.user_service.get_user_status(self.user_email)
-        print(f"DEBUG: Perfil obtido: {self.user_profile}")
-        self.after(0, self.navigate_based_on_status)
+
+        # Inicia a verificação de atualização em segundo plano
+        threading.Thread(target=self.check_for_updates, daemon=True).start()
+
+        self.navigate_based_on_status()
 
     def navigate_based_on_status(self):
+        """
+        Redireciona o utilizador para a tela correta com base no seu status.
+        """
         status = self.user_profile.get("status")
-        main_group = self.user_profile.get("main_group")
-        sub_group = self.user_profile.get("sub_group")
-        print(f"DEBUG: Navegando baseado no status - Status: {status}, Main Group: {main_group}, Sub Group: {sub_group}")
-        
         if status == "approved":
-            print("DEBUG: Usuário aprovado, carregando dados secundários...")
-            self.load_secondary_data()
-            main_menu = self.frames["MainMenuView"]
-            print("DEBUG: Atualizando informações do menu principal...")
-            main_menu.update_user_info(self.user_email, self.user_profile, self.CURRENT_APP_VERSION)
-            if main_group == "67_TELECOM" and sub_group == "SUPER_ADMIN":
-                print("DEBUG: Super admin detectado, mostrando dashboard...")
-                self.show_frame("AdminDashboardView")
-                return
-            print("DEBUG: Mostrando menu principal...")
-            self.show_frame("MainMenuView")
+            # Obtém a instância do MainMenuView
+            main_menu_frame = self.frames["MainMenuView"]
+            # Atualiza as informações do utilizador na tela antes de exibi-la
+            main_menu_frame.update_user_info(email=self.user_email,
+                                             user_profile=self.user_profile,
+                                             app_version=self.VERSION)
+            self.show_frame("MainMenuView") # Exibe o menu principal
         elif status == "pending":
-            print("DEBUG: Usuário pendente, mostrando tela de aprovação...")
             self.show_frame("PendingApprovalView")
-        else:
-            print("DEBUG: Usuário não registrado, mostrando tela de solicitação...")
-            self.frames["RequestAccessView"].on_show()
+        elif status == "unregistered":
             self.show_frame("RequestAccessView")
+        else:
+            messagebox.showerror("Erro de Acesso", f"Status desconhecido: {status}")
+            self.perform_logout()
 
     def perform_logout(self):
+        """
+        Realiza o logout do utilizador, limpando a sessão e retornando à tela de login.
+        """
         self.auth_service.logout()
-        self.credentials = None
-        self.user_email = None
+        self.user_email = ""
         self.user_profile = {}
-        self.show_frame("LoginView")
         self.frames["LoginView"].set_default_state()
+        self.show_frame("LoginView")
+        self.sheets_service.clear_all_cache()
 
-    def submit_access_request(self, full_name, username, main_group, sub_group, company_name=None):
-        if not self.user_email or self.user_email.strip() == "" or "Erro" in self.user_email:
-            messagebox.showerror("Erro Crítico", "Não foi possível obter seu e-mail. Por favor, tente fazer login novamente.")
-            self.perform_logout()
-            return
 
-        success, message = self.user_service.submit_access_request(self.user_email, full_name, username, main_group, sub_group, company_name)
-        if success:
-            NotificationPopup(self, message="Solicitação enviada com sucesso! Aguarde aprovação.", type="success")
-            self.show_frame("PendingApprovalView")
-        else:
-            if "já existe para este e-mail" in message:
-                messagebox.showerror("E-mail Já Registrado", "Este e-mail já está registado em nosso sistema. Por favor, utilize outro e-mail ou entre em contacto com o administrador para assistência.")
-            else:
-                messagebox.showerror("Erro ao Enviar Solicitação", f"Não foi possível enviar sua solicitação de acesso: {message}\nPor favor, verifique seus dados e tente novamente.")
+    # --- MÉTODOS DE SERVIÇO (Pass-through para os serviços) ---
 
-    def get_all_occurrences(self, force_refresh=False, exclude_statuses=None):
-        occurrences = self.occurrence_service.get_all_occurrences_for_user(self.user_email, force_refresh)
-        if exclude_statuses:
-            exclude_statuses_upper = [s.upper() for s in exclude_statuses]
-            return [occ for occ in occurrences if occ.get('Status', '').upper() not in exclude_statuses_upper]
-        return occurrences
+    def get_occurrences(self, force_refresh=False):
+        return self.occurrence_service.get_all_occurrences_for_user(self.user_email, force_refresh)
 
     def get_all_occurrences_for_admin(self, force_refresh=False):
-        """Método específico para o dashboard de admin - retorna todas as ocorrências"""
-        return self.sheets_service.get_all_occurrences_for_admin(force_refresh)
+        return self.sheets_service.get_all_occurrences(force_refresh)
 
-    def get_all_users(self, force_refresh=False):
-        return self.user_service.get_all_users(force_refresh)
+    def submit_occurrence(self, data, tests, attachment_path=None):
+        reg_view = self.frames.get("RegistrationView")
+        if reg_view:
+            reg_view.set_submitting_state(True)
+
+        def _submit():
+            success, message = self.sheets_service.register_occurrence(self.user_email, data, tests, attachment_path)
+            self.after(0, _handle_submit_result, success, message)
+
+        def _handle_submit_result(success, message):
+            if reg_view:
+                reg_view.set_submitting_state(False)
+                if success:
+                    NotificationPopup(self, message="Ocorrência registrada com sucesso!", type="success")
+                    reg_view.clear_form()
+                else:
+                    messagebox.showerror("Erro ao Registrar", message)
+
+        threading.Thread(target=_submit, daemon=True).start()
+
+    def submit_full_occurrence(self, title):
+        """
+        Wrapper para submeter uma ocorrência detalhada a partir da RegistrationView.
+        Coleta os dados necessários e chama o método de submissão genérico.
+        """
+        # A RegistrationView armazena os testes no controller.
+        # Idealmente, o estado deveria pertencer à view, mas isto resolve o problema atual.
+        tests = getattr(self, 'testes_adicionados', [])
+        data = {'title': title}
+        
+        # A RegistrationView atual não lida com anexos, então passamos None.
+        self.submit_occurrence(data, tests, attachment_path=None)
+
+    def submit_simple_call_occurrence(self, data):
+        view = self.frames.get("SimpleCallView")
+        if view:
+            view.set_submitting_state(True)
+        def _submit():
+            success, message = self.occurrence_service.register_simple_call_occurrence(self.user_email, self.user_profile, data)
+            self.after(0, self._handle_generic_submit_result, success, message, view)
+        threading.Thread(target=_submit, daemon=True).start()
+
+    def submit_equipment_occurrence(self, data, attachment_paths=None):
+        view = self.frames.get("EquipmentView")
+        if view:
+            view.set_submitting_state(True)
+        def _submit():
+            user_credentials = self.auth_service.load_user_credentials()
+            success, message = self.sheets_service.register_equipment_occurrence(user_credentials, self.user_email, data, attachment_paths or [])
+            self.after(0, self._handle_generic_submit_result, success, message, view)
+        threading.Thread(target=_submit, daemon=True).start()
+
+    def _handle_generic_submit_result(self, success, message, view):
+        if view:
+            view.set_submitting_state(False)
+        if success:
+            NotificationPopup(self, message=message, type="success")
+            if view:
+                view.clear_form()
+        else:
+            messagebox.showerror("Erro ao Registrar", message)
+
+    def show_occurrence_details(self, occurrence_id):
+        """
+        Mostra a tela de detalhes de uma ocorrência específica.
+        Busca os dados de uma ocorrência e mostra a janela de detalhes (Toplevel).
+        """
+        # Importa a view aqui para evitar potenciais dependências circulares
+        from views.main.occurrence_detail_view import OccurrenceDetailView
+
+        occurrence_data = self.occurrence_service.get_occurrence_details(occurrence_id)
+        if occurrence_data:
+            # A OccurrenceDetailView é uma janela Toplevel, então é instanciada diretamente
+            detail_window = OccurrenceDetailView(master=self, occurrence_data=occurrence_data)
+        else:
+            messagebox.showerror("Erro", f"Não foi possível encontrar os detalhes para a ocorrência {occurrence_id}.")
 
     def get_pending_requests(self):
         return self.user_service.get_pending_requests()
 
+    def get_all_users(self, force_refresh=False):
+        return self.user_service.get_all_users(force_refresh)
+
+    def get_operator_list(self, force_refresh=False):
+        return self.sheets_service.get_all_operators(force_refresh)
+
     def update_user_access(self, email, new_status):
         success, message = self.user_service.update_user_access(email, new_status)
         if success:
-            if new_status == 'approved':
-                NotificationPopup(self, message=f"O acesso para {email} foi aprovado com sucesso.", type="success")
-            else:
-                NotificationPopup(self, message=f"O acesso para {email} foi rejeitado.", type="info")
+            NotificationPopup(self, message, type="success")
             self.frames["AccessManagementView"].load_access_requests()
         else:
-            messagebox.showerror("Erro ao Atualizar", f"Ocorreu um erro ao atualizar o acesso: {message}")
+            messagebox.showerror("Erro", message)
 
-    def save_occurrence_status_changes(self, changes):
-        if not changes:
-            messagebox.showinfo("Nenhuma Alteração", "Nenhum status foi alterado.")
-            return
-        success, message = self.sheets_service.batch_update_occurrence_statuses(changes)
-        if success:
-            self.occurrences_cache = None
-            NotificationPopup(self, message=f"Os status de {len(changes)} ocorrência(s) foram salvos com sucesso.", type="success")
-            if "AdminDashboardView" in self.frames and hasattr(self.frames["AdminDashboardView"], '_occurrences_tab_initialized') and self.frames["AdminDashboardView"]._occurrences_tab_initialized:
-                self.frames["AdminDashboardView"].load_all_occurrences(force_refresh=True)
-            if "HistoryView" in self.frames:
-                self.frames["HistoryView"].load_history()
-        else:
-            messagebox.showerror("Erro", f"Ocorreu um erro ao salvar as alterações de status: {message}")
-
-    def update_user_profile(self, changes: dict):
-        if not changes:
-            messagebox.showinfo("Nenhuma Alteração", "Nenhum perfil foi alterado.")
-            return
+    def update_user_profiles_batch(self, changes):
         success, message = self.user_service.update_user_profiles_batch(changes)
         if success:
-            NotificationPopup(self, message=f"{len(changes)} perfil(is) de usuário foram atualizados com sucesso.", type="success")
-            self.frames["UserManagementView"].load_all_users(force_refresh=True)
+            NotificationPopup(self, message, type="success")
+            self.frames["UserManagementView"].on_show(force_refresh=True)
         else:
-            messagebox.showerror("Erro ao Salvar", f"Ocorreu um erro ao atualizar os perfis: {message}")
-
-    def get_user_occurrences(self):
-        return self.get_all_occurrences()
-
-    def get_current_user_profile(self):
-        return self.user_service.get_user_status(self.user_email)
-
-    def submit_simple_call_occurrence(self, form_data):
-        view = self.frames["SimpleCallView"]
-        view.set_submitting_state(True)
-        threading.Thread(target=self._submit_simple_call_thread, args=(form_data,), daemon=True).start()
-
-    def _submit_simple_call_thread(self, form_data):
-        success, message = self.sheets_service.register_simple_call_occurrence(self.user_email, form_data)
-        self.after(0, self._on_submission_finished, "SimpleCallView", success, message)
-
-    def submit_equipment_occurrence(self, data, attachment_paths=None):
-        view = self.frames["EquipmentView"]
-        view.set_submitting_state(True)
-        threading.Thread(target=self._submit_equipment_thread, args=(data, attachment_paths), daemon=True).start()
-
-    def _submit_equipment_thread(self, data, attachment_paths):
-        success, message = self.sheets_service.register_equipment_occurrence(self.credentials, self.user_email, data, attachment_paths)
-        self.after(0, self._on_submission_finished, "EquipmentView", success, message)
-
-    def submit_full_occurrence(self, title):
-        profile = self.get_current_user_profile()
-        main_group = profile.get("main_group")
-        if not title:
-            messagebox.showwarning("Campo Obrigatório", "O título da ocorrência é obrigatório.")
-            return
-        if main_group == 'PARTNER' and len(self.testes_adicionados) < 3:
-            messagebox.showwarning("Validação Falhou", "É necessário adicionar pelo menos 3 testes para parceiros.")
-            return
-        view = self.frames["RegistrationView"]
-        view.set_submitting_state(True)
-        threading.Thread(target=self._submit_full_occurrence_thread, args=(title, self.testes_adicionados.copy()), daemon=True).start()
-
-    def _submit_full_occurrence_thread(self, title, testes):
-        success, message = self.sheets_service.register_full_occurrence(self.user_email, title, testes)
-        self.after(0, self._on_submission_finished, "RegistrationView", success, message)
-
-    def _on_submission_finished(self, view_name, success, message):
-        view = self.frames[view_name]
-        if hasattr(view, 'set_submitting_state'):
-            view.set_submitting_state(False)
-        if success:
-            self.occurrences_cache = None
-            NotificationPopup(self, message=message, type="success")
-            if hasattr(view, 'on_show'):
-                 view.on_show()
-            self.show_frame("MainMenuView")
-        else:
-            messagebox.showerror("Ocorreu um Erro", f"Não foi possível completar a operação: {message}\nPor favor, tente novamente.")
+            messagebox.showerror("Erro ao Atualizar", message)
 
     def update_occurrence_status_from_history(self, occurrence_id, new_status):
+        """
+        Atualiza o status de uma ocorrência a partir da tela de histórico.
+        """
         success, message = self.sheets_service.update_occurrence_status(occurrence_id, new_status)
         if success:
-            self.occurrences_cache = None
-            NotificationPopup(self, message=f"Status da ocorrência {occurrence_id} atualizado para '{new_status}'.", type="success")
-            if "HistoryView" in self.frames:
-                self.frames["HistoryView"].load_history()
-            if "AdminDashboardView" in self.frames and hasattr(self.frames["AdminDashboardView"], '_occurrences_tab_initialized') and self.frames["AdminDashboardView"]._occurrences_tab_initialized:
-                self.frames["AdminDashboardView"].load_all_occurrences(force_refresh=True)
+            NotificationPopup(self, message, type="success")
+            self.frames["HistoryView"].load_history()
         else:
-            messagebox.showerror("Erro", f"Não foi possível atualizar o status da ocorrência: {message}")
+            messagebox.showerror("Erro", message)
+            self.frames["HistoryView"].load_history()
 
+    def get_current_user_profile(self):
+        """Retorna o perfil do utilizador atualmente logado."""
+        return self.user_profile
+
+    # --- LÓGICA DE ATUALIZAÇÃO ---
     def check_for_updates(self):
+        """
+        Verifica se há uma nova versão da aplicação disponível.
+        """
         try:
-            response = requests.get(self.REMOTE_VERSION_URL, timeout=5)
+            response = requests.get(self.VERSION_URL, timeout=5)
             response.raise_for_status()
-            remote_version = response.text.strip()
-            if remote_version and self._compare_versions(remote_version, self.CURRENT_APP_VERSION) > 0:
-                self.after(0, lambda: self._prompt_for_update(remote_version))
-            else:
-                print("REGTEL: Nenhuma atualização disponível ou já está na versão mais recente.")
-        except requests.exceptions.RequestException as e:
-            print(f"REGTEL: Erro ao verificar atualizações: {e}")
-        except Exception as e:
-            print(f"REGTEL: Erro inesperado na verificação de atualização: {e}")
+            data = response.json()
+            latest_version = data.get("version")
+            self.NEW_INSTALLER_DOWNLOAD_URL = data.get("url")
 
-    def _compare_versions(self, version1, version2):
-        v1_parts = [int(p) for p in version1.split('.')]
-        v2_parts = [int(p) for p in version2.split('.')]
-        for i in range(max(len(v1_parts), len(v2_parts))):
-            p1 = v1_parts[i] if i < len(v1_parts) else 0
-            p2 = v2_parts[i] if i < len(v2_parts) else 0
-            if p1 > p2:
-                return 1
-            if p1 < p2:
-                return -1
-        return 0
+            if latest_version and self.NEW_INSTALLER_DOWNLOAD_URL:
+                if latest_version > self.VERSION:
+                    self.after(0, self.prompt_update, latest_version)
+        except (requests.RequestException, ValueError) as e:
+            print(f"REGTEL: Não foi possível verificar atualizações. Erro: {e}")
 
-    def _prompt_for_update(self, remote_version):
-        if messagebox.askyesno(
-            "Atualização Disponível",
-            f"Uma nova versão do REGTEL ({remote_version}) está disponível!\n"
-            "Deseja descarregar e instalar a atualização agora?\n\n"
-            "A aplicação será fechada para iniciar o processo de atualização."
-        ):
+    def prompt_update(self, new_version):
+        """
+        Mostra uma mensagem a perguntar ao utilizador se deseja atualizar.
+        """
+        if messagebox.askyesno("Atualização Disponível",
+                               f"Uma nova versão ({new_version}) está disponível.\n"
+                               "Deseja baixar e instalar a atualização agora?"):
             self.initiate_update()
-        else:
-            NotificationPopup(self, message="Atualização adiada. Pode verificar novamente mais tarde.", type="info")
 
     def initiate_update(self):
-        if getattr(sys, '_MEIPASS', None): # type: ignore
-            updater_script_path = os.path.join(sys._MEIPASS, 'services', 'updater.py') # type: ignore
-        else:
-            updater_script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'services', 'updater.py'))
+        """
+        Inicia o script de atualização 'updater.py' em um processo separado.
+        """
+        updater_script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'services', 'updater.py'))
 
         if getattr(sys, '_MEIPASS', None): # type: ignore
             app_install_dir = os.path.dirname(sys.executable) # type: ignore
@@ -464,4 +375,3 @@ class App(ctk.CTk):
             self.quit()
         except Exception as e:
             messagebox.showerror("Erro de Atualização", f"Não foi possível iniciar o processo de atualização: {e}")
-            print(f"REGTEL: Erro ao iniciar o updater: {e}")
